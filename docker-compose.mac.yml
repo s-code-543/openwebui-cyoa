@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  # Ollama runs natively on Mac via `brew install ollama`
+  # Access at: http://host.docker.internal:11434
+  
+  # Whisper.cpp runs natively via LaunchAgent
+  # Access at: http://host.docker.internal:10300
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    volumes:
+      - webui-data:/app/backend/data
+      - webui-logs:/app/backend/logs
+    environment:
+      # Native Ollama on Mac
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      
+      WEBUI_SECRET_KEY: "change-me-to-a-long-random-string"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+      # Native Whisper.cpp STT on Mac (port 10300)
+      AUDIO_STT_ENGINE: "openai"
+      AUDIO_STT_OPENAI_API_BASE_URL: "http://host.docker.internal:10300/v1"
+      AUDIO_STT_OPENAI_API_KEY: "sk-123"
+      AUDIO_STT_MODEL: "large-v3-turbo"
+      
+      # Disable aggressive voice activity detection - wait for manual stop
+      AUDIO_STT_VAD_ENABLED: "false"
+      # Increase max recording time (in seconds, default is 30)
+      AUDIO_MAX_RECORDING_TIME: "600"
+
+  # CYOA Game Server - Commented out for initial testing
+  # Uncomment after verifying Open Web UI works
+  # cyoa-game-server:
+  #   build: ./cyoa-game-server
+  #   container_name: cyoa-game-server
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8000"  # Django server
+  #     - "5678:5678"  # debugpy
+  #   environment:
+  #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  #     DJANGO_SECRET_KEY: "your-secret-key-here"
+  #     PYTHONUNBUFFERED: "1"
+  #   volumes:
+  #     - ./cyoa-game-server:/app
+
+  openwebui-ssl:
+    image: nginx:alpine
+    container_name: openwebui-ssl
+    restart: unless-stopped
+    depends_on:
+      - open-webui
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/certs:ro
+
+volumes:
+  webui-data:
+  webui-logs:

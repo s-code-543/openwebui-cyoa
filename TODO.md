@@ -1,32 +1,40 @@
 # Mac Version TODO List
 
 ## Overview
-Adapting the openwebui-cyoa stack to run on Mac. Key changes: Remove services requiring Nvidia/GPU from Docker. CYOA game server (Django) stays in Docker. Whisper STT and LLMs run natively on Mac for hardware access.
+Mac adaptation complete for basic stack. Open Web UI running with native Whisper.cpp STT and Ollama. Next steps: CYOA game server integration, API configuration, and remote access setup.
 
-## Tasks
+## Completed ✅
+- Native Whisper.cpp STT server with Core ML acceleration
+- Native Ollama installation for local LLM testing
+- Open Web UI with HTTPS via nginx and self-signed certificates
+- Colima-based Docker environment
 
-### 1. Remove Ollama service from docker-compose.yml
-- [ ] Delete the Ollama container service since Mac LLMs need hardware access outside Docker
-- [ ] Remove service definition and any volume/network references
+## Remaining Tasks
 
-### 2. Remove speeches (Whisper STT) service from docker-compose.yml
-- [ ] Remove the speeches service that uses Nvidia container image
-- [ ] This needs GPU/hardware access that Docker doesn't provide on Mac
+### 1. Enable CYOA Game Server
+- [ ] Uncomment cyoa-game-server in docker-compose.mac.yml
+- [ ] Test Django server starts correctly in Docker
+- [ ] Verify Open Web UI can connect to CYOA server
+- [ ] Test CYOA models appear in model selection
 
-### 3. Set up native Whisper STT server on Mac
-- [ ] Install Whisper dependencies locally (likely via Python/pip or Homebrew)
-- [ ] Configure Whisper to run as local service
-- [ ] Determine best port/endpoint configuration for Open Web UI integration
+### 2. Configure API Keys
+- [ ] Figure out how to recover/locate existing API keys
+- [ ] Set ANTHROPIC_API_KEY in .env file
+- [ ] Verify CYOA server can reach Claude API
 
-### 4. Decide on LLM strategy (native Ollama vs 100% API)
-- [ ] Test if native Mac Ollama install is viable for development/testing
-- [ ] Or go full API (Anthropic/OpenAI) to save credits
-- [ ] Document decision
+### 3. Add OpenRouter Support
+- [ ] Research OpenRouter API integration
+- [ ] Add OpenRouter configuration to CYOA server
+- [ ] Test OpenRouter as alternative to direct Anthropic API
 
-### 5. Create launch script/documentation for Mac setup
-- [ ] Document startup sequence: Whisper server, Docker compose (nginx + Open Web UI + CYOA server)
-- [ ] Include any Ollama setup if applicable
+### 4. Test Full End-to-End Workflow
+- [ ] Test basic chat with Ollama models
+- [ ] Test STT (speech-to-text) with Whisper
+- [ ] Test CYOA game with Claude via Anthropic API
+- [ ] Verify all pirate CYOA context files load correctly
 
-### 6. Test full stack integration
-- [ ] Verify Open Web UI → nginx → CYOA server → LLM backend chain works end-to-end on Mac
-- [ ] Test Whisper STT integration with Open Web UI
+### 5. Remote Access Setup
+- [ ] Obtain domain name
+- [ ] Set up Cloudflare tunnel for secure remote access
+- [ ] Update nginx configuration for proper domain
+- [ ] Test remote access from external network
