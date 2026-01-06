@@ -41,14 +41,14 @@ def get_ollama_models():
         return []
 
 
-def call_ollama(messages, system_prompt=None, model="qwen3:30b"):
+def call_ollama(messages, system_prompt=None, model="qwen3:4b"):
     """
     Call Ollama API with the given messages.
     
     Args:
         messages: List of message dicts with 'role' and 'content'
         system_prompt: Optional system prompt string
-        model: Ollama model to use (default: qwen3:30b)
+        model: Ollama model to use (default: qwen3:4b)
     
     Returns:
         String response from the model

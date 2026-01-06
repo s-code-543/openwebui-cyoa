@@ -119,7 +119,7 @@ def chat_completions(request):
         
         # Check for BASE mode (unmodified storyteller output)
         if "cyoa-base" in model_name:
-            backend_model = body.get("backend_model", "qwen3:30b")
+            backend_model = body.get("backend_model", "qwen3:4b")
             
             print(f"\n{'='*60}")
             print(f"[BASE] Received system_message: {repr(system_message)}")
@@ -175,7 +175,7 @@ def chat_completions(request):
         
         # Check for MODERATED mode (wait for base, then judge)
         if "cyoa-moderated" in model_name:
-            backend_model = body.get("backend_model", "qwen3:30b")
+            backend_model = body.get("backend_model", "qwen3:4b")
             
             print(f"\n{'='*60}")
             print(f"[MODERATED] Received system_message: {repr(system_message)}")
@@ -287,8 +287,8 @@ def chat_completions(request):
             print(f"\n[PRODUCTION MODE] Processing gameserver-cyoa request")
             
             # Determine which backend model to use
-            # Default to qwen3:30b, but allow override
-            backend_model = body.get("backend_model", "qwen3:30b")
+            # Default to qwen3:4b, but allow override
+            backend_model = body.get("backend_model", "qwen3:4b")
             
             print(f"\n{'='*60}")
             print(f"CYOA Game Server - Production Mode")
