@@ -30,6 +30,30 @@ def get_active_configuration():
         return None
 
 
+def apply_pacing_template(prompt_text, config):
+    """
+    Replace template variables in prompt text with values from configuration.
+    
+    Args:
+        prompt_text: The prompt text containing template variables
+        config: Configuration instance with pacing values
+    
+    Returns:
+        String with template variables replaced
+    """
+    if not config:
+        return prompt_text
+    
+    pacing = config.get_pacing_dict()
+    result = prompt_text
+    
+    for key, value in pacing.items():
+        placeholder = f"{{{key}}}"
+        result = result.replace(placeholder, str(value))
+    
+    return result
+
+
 def get_active_judge_prompt():
     """
     Retrieve the active judge prompt from database.
@@ -139,8 +163,11 @@ def chat_completions(request):
                     continue
                 filtered_messages.append(msg)
         
-        # Use adventure prompt from active configuration
-        system_message = config.adventure_prompt.prompt_text
+        # Use adventure prompt from active configuration and apply pacing template
+        system_message = apply_pacing_template(
+            config.adventure_prompt.prompt_text,
+            config
+        )
         
         model_name = body.get("model", "")
         

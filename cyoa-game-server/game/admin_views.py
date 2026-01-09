@@ -281,6 +281,11 @@ def config_editor(request, config_id=None):
             judge_prompt_id = request.POST.get('judge_prompt')
             judge_model = request.POST.get('judge_model')
             judge_timeout = request.POST.get('judge_timeout', '30')
+            total_turns = request.POST.get('total_turns', '10')
+            phase1_turns = request.POST.get('phase1_turns', '3')
+            phase2_turns = request.POST.get('phase2_turns', '3')
+            phase3_turns = request.POST.get('phase3_turns', '3')
+            phase4_turns = request.POST.get('phase4_turns', '1')
             
             if not all([name, adventure_prompt_id, storyteller_model, judge_prompt_id, judge_model]):
                 messages.error(request, 'All fields are required')
@@ -290,6 +295,11 @@ def config_editor(request, config_id=None):
                     judge_prompt = Prompt.objects.get(pk=judge_prompt_id)
                     storyteller_timeout_int = int(storyteller_timeout)
                     judge_timeout_int = int(judge_timeout)
+                    total_turns_int = int(total_turns)
+                    phase1_turns_int = int(phase1_turns)
+                    phase2_turns_int = int(phase2_turns)
+                    phase3_turns_int = int(phase3_turns)
+                    phase4_turns_int = int(phase4_turns)
                     
                     if config:
                         # Update existing
@@ -301,6 +311,11 @@ def config_editor(request, config_id=None):
                         config.judge_prompt = judge_prompt
                         config.judge_model = judge_model
                         config.judge_timeout = judge_timeout_int
+                        config.total_turns = total_turns_int
+                        config.phase1_turns = phase1_turns_int
+                        config.phase2_turns = phase2_turns_int
+                        config.phase3_turns = phase3_turns_int
+                        config.phase4_turns = phase4_turns_int
                         config.save()
                         messages.success(request, f'Configuration "{name}" updated')
                     else:
@@ -314,6 +329,11 @@ def config_editor(request, config_id=None):
                             judge_prompt=judge_prompt,
                             judge_model=judge_model,
                             judge_timeout=judge_timeout_int,
+                            total_turns=total_turns_int,
+                            phase1_turns=phase1_turns_int,
+                            phase2_turns=phase2_turns_int,
+                            phase3_turns=phase3_turns_int,
+                            phase4_turns=phase4_turns_int,
                             is_active=False
                         )
                         messages.success(request, f'Configuration "{name}" created')

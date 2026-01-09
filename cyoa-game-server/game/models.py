@@ -135,6 +135,27 @@ class Configuration(models.Model):
         default=30,
         help_text="Timeout in seconds for judge validation (default: 30)"
     )
+    total_turns = models.IntegerField(
+        default=10,
+        choices=[(5, '5 turns'), (10, '10 turns'), (15, '15 turns'), (20, '20 turns')],
+        help_text="Total number of turns in the adventure"
+    )
+    phase1_turns = models.IntegerField(
+        default=3,
+        help_text="Turns for Phase 1: Introduction/Exposition/Story Building"
+    )
+    phase2_turns = models.IntegerField(
+        default=3,
+        help_text="Turns for Phase 2: Victory/Loss Conditions"
+    )
+    phase3_turns = models.IntegerField(
+        default=3,
+        help_text="Turns for Phase 3: Progress/Narrative Twists"
+    )
+    phase4_turns = models.IntegerField(
+        default=1,
+        help_text="Turns for Phase 4: Finale/Conclusion Setup"
+    )
     is_active = models.BooleanField(
         default=False,
         db_index=True,
@@ -152,6 +173,34 @@ class Configuration(models.Model):
     def __str__(self):
         active = " [ACTIVE]" if self.is_active else ""
         return f"{self.name}{active}"
+    
+    @staticmethod
+    def get_default_pacing(total_turns):
+        """
+        Get default pacing for a given number of turns.
+        Returns tuple of (phase1, phase2, phase3, phase4)
+        """
+        pacing_defaults = {
+            5: (1, 1, 2, 1),
+            10: (3, 3, 3, 1),
+            15: (4, 5, 4, 2),
+            20: (5, 6, 6, 3),
+        }
+        return pacing_defaults.get(total_turns, (3, 3, 3, 1))
+    
+    def get_pacing_dict(self):
+        """Return pacing information as a dictionary for template substitution."""
+        return {
+            'TOTAL_TURNS': self.total_turns,
+            'PHASE1_TURNS': self.phase1_turns,
+            'PHASE2_TURNS': self.phase2_turns,
+            'PHASE3_TURNS': self.phase3_turns,
+            'PHASE4_TURNS': self.phase4_turns,
+            'PHASE1_END': self.phase1_turns,
+            'PHASE2_END': self.phase1_turns + self.phase2_turns,
+            'PHASE3_END': self.phase1_turns + self.phase2_turns + self.phase3_turns,
+            'PHASE4_END': self.total_turns,
+        }
     
     def save(self, *args, **kwargs):
         # If this configuration is being set as active, deactivate all others
