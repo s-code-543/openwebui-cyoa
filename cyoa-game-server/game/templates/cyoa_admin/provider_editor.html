@@ -1,0 +1,178 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}{% if provider %}Edit Provider{% else %}Add Provider{% endif %}{% endblock %}
+
+{% block page_title %}{% if provider %}Edit Provider{% else %}Add Provider{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <form method="POST" x-data="providerForm()" autocomplete="off">
+        {% csrf_token %}
+        
+        <div class="bg-white shadow-md rounded-lg p-6 space-y-6">
+            <!-- Name -->
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">Provider Name</label>
+                <input type="text" 
+                       name="name" 
+                       id="name" 
+                       value="{{ provider.name|default:'' }}"
+                       required
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="e.g., Office Ollama, My Anthropic">
+                <p class="mt-1 text-sm text-gray-500">A friendly name to identify this provider</p>
+            </div>
+
+            <!-- Provider Type -->
+            <div>
+                <label for="provider_type" class="block text-sm font-medium text-gray-700">Provider Type</label>
+                <select name="provider_type" 
+                        id="provider_type" 
+                        x-model="providerType"
+                        required
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="ollama" {% if provider.provider_type == 'ollama' %}selected{% endif %}>Ollama Server</option>
+                    <option value="anthropic" {% if provider.provider_type == 'anthropic' %}selected{% endif %}>Anthropic (Claude)</option>
+                </select>
+            </div>
+
+            <!-- Base URL (for Ollama) -->
+            <div x-show="providerType === 'ollama'" x-cloak>
+                <label for="base_url" class="block text-sm font-medium text-gray-700">Base URL</label>
+                <input type="url" 
+                       name="base_url" 
+                       id="base_url" 
+                       value="{{ provider.base_url|default:'' }}"
+                       x-bind:required="providerType === 'ollama'"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="http://192.168.1.100:11434">
+                <p class="mt-1 text-sm text-gray-500">URL of the external Ollama server (include http:// or https://)</p>
+            </div>
+
+            <!-- API Key (for Anthropic) -->
+            <div x-show="providerType === 'anthropic'" x-cloak>
+                <label for="api_key" class="block text-sm font-medium text-gray-700">API Key</label>
+                <input type="password" 
+                       name="api_key" 
+                       id="api_key" 
+                       value="{{ provider.api_key|default:'' }}"
+                       x-bind:required="providerType === 'anthropic'"
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                       placeholder="sk-ant-...">
+                <p class="mt-1 text-sm text-gray-500">Your Anthropic API key</p>
+            </div>
+
+            <!-- Test Status Display -->
+            <div x-show="testStatus !== null" x-cloak>
+                <div x-bind:class="testSuccess ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'" 
+                     class="border-l-4 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg x-show="testSuccess" class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            <svg x-show="!testSuccess" class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p x-bind:class="testSuccess ? 'text-green-700' : 'text-red-700'" class="text-sm" x-text="testStatus"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-between items-center pt-4">
+                <div class="space-x-2">
+                    <button type="button" 
+                            x-on:click="testConnection()"
+                            x-bind:disabled="testing"
+                            class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                        <span x-show="!testing">🔍 Test Connection</span>
+                        <span x-show="testing">Testing...</span>
+                    </button>
+                    
+                    <button type="submit" 
+                            name="action" 
+                            value="save"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                        💾 Save Provider
+                    </button>
+                </div>
+                
+                <a href="{% url 'admin:provider_list' %}" 
+                   class="text-gray-600 hover:text-gray-900">
+                    Cancel
+                </a>
+            </div>
+        </div>
+    </form>
+
+    {% if provider %}
+    <div class="mt-4">
+        <a href="{% url 'admin:browse_provider_models' provider.id %}" 
+           class="text-indigo-600 hover:text-indigo-900 text-sm">
+            → Browse and import models from this provider
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<script id="provider-data" type="application/json">
+{
+    "providerId": {% if provider %}{{ provider.id }}{% else %}null{% endif %},
+    "providerType": "{{ provider.provider_type|default:'ollama' }}",
+    "testProviderUrl": "{% url 'admin:test_provider' %}",
+    "csrfToken": "{{ csrf_token }}"
+}
+</script>
+
+<script>
+function providerForm() {
+    const config = JSON.parse(document.getElementById('provider-data').textContent);
+    
+    return {
+        providerType: config.providerType,
+        testStatus: null,
+        testSuccess: false,
+        testing: false,
+        
+        async testConnection() {
+            this.testing = true;
+            this.testStatus = null;
+            
+            const formData = {
+                provider_type: document.getElementById('provider_type').value,
+                base_url: document.getElementById('base_url')?.value || '',
+                api_key: document.getElementById('api_key')?.value || ''
+            };
+            
+            if (config.providerId !== null) {
+                formData.provider_id = config.providerId;
+            }
+            
+            try {
+                const response = await fetch(config.testProviderUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': config.csrfToken
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                this.testSuccess = result.success;
+                this.testStatus = result.message;
+            } catch (error) {
+                this.testSuccess = false;
+                this.testStatus = 'Connection test failed: ' + error.message;
+            } finally {
+                this.testing = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

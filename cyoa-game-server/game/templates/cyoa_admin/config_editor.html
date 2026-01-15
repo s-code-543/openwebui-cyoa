@@ -111,13 +111,16 @@
                         </option>
                         {% endfor %}
                     </optgroup>
-                    <optgroup label="Cloud Models">
-                        {% for model in cloud_models %}
-                        <option value="{{ model }}" disabled style="color: #999;">
-                            {{ model }}
+                    {% if external_models %}
+                    <optgroup label="External Models">
+                        {% for model in external_models %}
+                        <option value="{{ model.model_identifier }}"
+                                {% if config and config.storyteller_model == model.model_identifier %}selected{% endif %}>
+                            {{ model.name }}
                         </option>
                         {% endfor %}
                     </optgroup>
+                    {% endif %}
                 </select>
             </div>
             
@@ -167,13 +170,16 @@
                         </option>
                         {% endfor %}
                     </optgroup>
-                    <optgroup label="Cloud Models">
-                        {% for model in cloud_models %}
-                        <option value="{{ model }}" disabled style="color: #999;">
-                            {{ model }}
+                    {% if external_models %}
+                    <optgroup label="External Models">
+                        {% for model in external_models %}
+                        <option value="{{ model.model_identifier }}"
+                                {% if config and config.judge_model == model.model_identifier %}selected{% endif %}>
+                            {{ model.name }}
                         </option>
                         {% endfor %}
                     </optgroup>
+                    {% endif %}
                 </select>
             </div>
             
@@ -253,27 +259,31 @@ async function refreshModels() {
         });
         
         if (!response.ok) throw new Error('Failed to refresh models');
-        
-        const data = await response.json();
-        
-        // Update storyteller dropdown
+         (only Ollama models)
         const storytellerOllama = storytellerSelect.querySelector('optgroup[label="Local Models (Ollama)"]');
-        storytellerOllama.innerHTML = '';
-        data.models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            if (model === currentStoryteller) option.selected = true;
-            storytellerOllama.appendChild(option);
-        });
+        if (storytellerOllama) {
+            storytellerOllama.innerHTML = '';
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                if (model === currentStoryteller) option.selected = true;
+                storytellerOllama.appendChild(option);
+            });
+        }
         
-        // Update judge dropdown
+        // Update judge dropdown (only Ollama models)
         const judgeOllama = judgeSelect.querySelector('optgroup[label="Local Models (Ollama)"]');
-        judgeOllama.innerHTML = '';
-        data.models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
+        if (judgeOllama) {
+            judgeOllama.innerHTML = '';
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                if (model === currentJudge) option.selected = true;
+                judgeOllama.appendChild(option);
+            });
+        } option.textContent = model;
             if (model === currentJudge) option.selected = true;
             judgeOllama.appendChild(option);
         });

@@ -1,0 +1,232 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}Browse Models - {{ provider.name }}{% endblock %}
+
+{% block page_title %}Browse Models{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center text-sm text-gray-500 mb-2">
+        <a href="{% url 'admin:provider_list' %}" class="hover:text-gray-700">Providers</a>
+        <span class="mx-2">›</span>
+        <a href="{% url 'admin:provider_editor' provider.id %}" class="hover:text-gray-700">{{ provider.name }}</a>
+        <span class="mx-2">›</span>
+        <span class="text-gray-900">Browse Models</span>
+    </div>
+    
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-xl text-gray-600">Available Models from {{ provider.name }}</h2>
+            <p class="text-sm text-gray-500 mt-1">
+                {% if provider.provider_type == 'ollama' %}
+                    Ollama server: {{ provider.base_url }}
+                {% elif provider.provider_type == 'anthropic' %}
+                    Anthropic Claude models
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<div x-data="modelBrowser()" class="space-y-6">
+    <!-- Model Selection -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">
+                    Select Models to Import
+                </h3>
+                <div class="text-sm text-gray-500">
+                    <span x-text="selectedCount"></span> selected
+                </div>
+            </div>
+        </div>
+        
+        <div class="divide-y divide-gray-200">
+            {% for model in available_models %}
+            <div class="px-6 py-4 hover:bg-gray-50 transition">
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" 
+                           value="{{ model.id }}"
+                           {% if model.imported %}disabled checked{% endif %}
+                           x-on:change="toggleModel('{{ model.id }}')"
+                           class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    
+                    <div class="ml-3 flex-1">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">
+                                    {{ model.name }}
+                                    {% if model.imported %}
+                                    <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                        ✓ Already Imported
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if model.description %}
+                                <p class="text-sm text-gray-500 mt-1">{{ model.description }}</p>
+                                {% endif %}
+                                
+                                <div class="mt-1 flex items-center space-x-3 text-xs text-gray-400">
+                                    <span>ID: <code class="bg-gray-100 px-1 rounded">{{ model.id }}</code></span>
+                                    {% if model.size %}
+                                    <span>Size: {{ model.size }} bytes</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+            {% empty %}
+            <div class="px-6 py-8 text-center text-gray-500">
+                <div class="text-lg mb-2">No models found</div>
+                <p class="text-sm">
+                    {% if provider.provider_type == 'ollama' %}
+                        Make sure the Ollama server is running and accessible
+                    {% else %}
+                        Unable to fetch models from this provider
+                    {% endif %}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Import Button -->
+    {% if available_models %}
+    <div class="flex justify-between items-center">
+        <a href="{% url 'admin:provider_editor' provider.id %}" 
+           class="text-gray-600 hover:text-gray-900">
+            ← Back to Provider
+        </a>
+        
+        <div class="space-x-2">
+            <button x-on:click="selectAll()" 
+                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                Select All Available
+            </button>
+            
+            <button x-on:click="importSelected()" 
+                    x-bind:disabled="selectedCount === 0 || importing"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                <span x-show="!importing">Import Selected Models</span>
+                <span x-show="importing">Importing...</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Status Message -->
+    <div x-show="statusMessage" x-cloak>
+        <div x-bind:class="statusSuccess ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'" 
+             class="border-l-4 p-4 rounded">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg x-show="statusSuccess" class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <svg x-show="!statusSuccess" class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p x-bind:class="statusSuccess ? 'text-green-700' : 'text-red-700'" class="text-sm" x-text="statusMessage"></p>
+                    <a x-show="statusSuccess" 
+                       href="{% url 'admin:model_list' %}" 
+                       class="text-sm font-medium underline mt-2 inline-block"
+                       x-bind:class="statusSuccess ? 'text-green-700' : 'text-red-700'">
+                        View all models →
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="browse-models-data" type="application/json">
+{
+    "providerId": {{ provider.id }},
+    "importModelsUrl": "{% url 'admin:import_models' %}",
+    "csrfToken": "{{ csrf_token }}"
+}
+</script>
+
+<script>
+function modelBrowser() {
+    const config = JSON.parse(document.getElementById('browse-models-data').textContent);
+    
+    return {
+        selectedModels: [],
+        importing: false,
+        statusMessage: null,
+        statusSuccess: false,
+        
+        get selectedCount() {
+            return this.selectedModels.length;
+        },
+        
+        toggleModel(modelId) {
+            const index = this.selectedModels.indexOf(modelId);
+            if (index > -1) {
+                this.selectedModels.splice(index, 1);
+            } else {
+                this.selectedModels.push(modelId);
+            }
+        },
+        
+        selectAll() {
+            // Select all non-imported models
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:not(:disabled)');
+            checkboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.checked = true;
+                    this.selectedModels.push(cb.value);
+                }
+            });
+        },
+        
+        async importSelected() {
+            if (this.selectedModels.length === 0) {
+                return;
+            }
+            
+            this.importing = true;
+            this.statusMessage = null;
+            
+            try {
+                const response = await fetch(config.importModelsUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': config.csrfToken
+                    },
+                    body: JSON.stringify({
+                        provider_id: config.providerId,
+                        model_ids: this.selectedModels
+                    })
+                });
+                
+                const result = await response.json();
+                this.statusSuccess = result.success;
+                this.statusMessage = result.message;
+                
+                if (result.success) {
+                    // Clear selection and reload page after a delay
+                    this.selectedModels = [];
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                this.statusSuccess = false;
+                this.statusMessage = 'Import failed: ' + error.message;
+            } finally {
+                this.importing = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

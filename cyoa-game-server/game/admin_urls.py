@@ -16,8 +16,21 @@ urlpatterns = [
     path('configurations/', admin_views.config_list, name='config_list'),
     path('configurations/new/', admin_views.config_editor, name='config_new'),
     path('configurations/<int:config_id>/', admin_views.config_editor, name='config_editor'),
+    
+    # API Provider Management
+    path('providers/', admin_views.provider_list, name='provider_list'),
+    path('providers/new/', admin_views.provider_editor, name='provider_new'),
+    path('providers/<int:provider_id>/', admin_views.provider_editor, name='provider_editor'),
+    
+    # LLM Model Management
+    path('models/', admin_views.model_list, name='model_list'),
+    path('models/browse/<int:provider_id>/', admin_views.browse_provider_models, name='browse_provider_models'),
+    path('models/import/', admin_views.import_models, name='import_models'),
+    
+    # API endpoints
     path('api/preview-markdown/', admin_views.preview_markdown, name='preview_markdown'),
     path('api/refresh-models/', admin_views.refresh_models, name='refresh_models'),
+    path('api/test-provider/', admin_views.test_provider_connection, name='test_provider'),
     path('api/clear-audit-log/', admin_views.clear_audit_log, name='clear_audit_log'),
     path('api/reset-statistics/', admin_views.reset_statistics, name='reset_statistics'),
 ]

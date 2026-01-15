@@ -1,0 +1,116 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}LLM Models{% endblock %}
+
+{% block page_title %}LLM Models{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h2 class="text-xl text-gray-600">Registered Models</h2>
+        <p class="text-sm text-gray-500 mt-1">Models available for use in configurations</p>
+    </div>
+    <a href="{% url 'admin:provider_list' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+        → Manage Providers
+    </a>
+</div>
+
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for model in models %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{{ model.name }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if model.source == 'local_ollama' %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        🖥️ Local
+                    </span>
+                    {% elif model.source == 'external' %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                        🌐 External
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {% if model.provider %}
+                        <div>{{ model.provider.name }}</div>
+                        <div class="text-xs text-gray-400">
+                            {% if model.provider.provider_type == 'ollama' %}🦙 Ollama{% elif model.provider.provider_type == 'anthropic' %}🤖 Anthropic{% endif %}
+                        </div>
+                    {% else %}
+                        <span class="text-gray-400">Local Ollama</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                    <code class="bg-gray-100 px-2 py-1 rounded text-xs">{{ model.model_identifier }}</code>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if model.is_available %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        ✓ Available
+                    </span>
+                    {% else %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        Unavailable
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    {% if model.provider %}
+                    <a href="{% url 'admin:provider_editor' model.provider.id %}" class="text-blue-600 hover:text-blue-900">Edit Provider</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                    <div class="text-lg mb-2">No models registered</div>
+                    <p class="text-sm mb-4">Add a provider and import models to get started</p>
+                    <a href="{% url 'admin:provider_list' %}" class="text-blue-600 hover:text-blue-900">
+                        → Go to Providers
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Provider Quick Links -->
+{% if providers %}
+<div class="mt-6 bg-white shadow-md rounded-lg p-6">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Browse Models from Providers</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for provider in providers %}
+        <a href="{% url 'admin:browse_provider_models' provider.id %}" 
+           class="block p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-medium text-gray-900">{{ provider.name }}</div>
+                    <div class="text-sm text-gray-500">
+                        {% if provider.provider_type == 'ollama' %}🦙 Ollama{% elif provider.provider_type == 'anthropic' %}🤖 Anthropic{% endif %}
+                    </div>
+                </div>
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}API Providers{% endblock %}
+
+{% block page_title %}API Providers{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h2 class="text-xl text-gray-600">Manage external LLM providers</h2>
+        <p class="text-sm text-gray-500 mt-1">Connect to external Ollama servers and cloud APIs like Anthropic</p>
+    </div>
+    <a href="{% url 'admin:provider_new' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+        + Add Provider
+    </a>
+</div>
+
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Tested</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for provider in providers %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{{ provider.name }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if provider.provider_type == 'ollama' %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                        🦙 Ollama
+                    </span>
+                    {% elif provider.provider_type == 'anthropic' %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                        🤖 Anthropic
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                    {% if provider.provider_type == 'ollama' %}
+                        {{ provider.base_url|truncatechars:40 }}
+                    {% elif provider.provider_type == 'anthropic' %}
+                        <span class="text-gray-400">API Key: {{ provider.api_key|slice:":10" }}...</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if provider.is_active %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        ✓ Active
+                    </span>
+                    {% else %}
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        Inactive
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {% if provider.last_tested %}
+                        <div class="text-green-600">✓ {{ provider.last_tested|date:"M d, H:i" }}</div>
+                        <div class="text-xs text-gray-400">{{ provider.test_status|truncatechars:30 }}</div>
+                    {% else %}
+                        <span class="text-gray-400">Not tested</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <a href="{% url 'admin:provider_editor' provider.id %}" class="text-blue-600 hover:text-blue-900">Edit</a>
+                    <a href="{% url 'admin:browse_provider_models' provider.id %}" class="text-indigo-600 hover:text-indigo-900">Browse Models</a>
+                    <form method="POST" action="{% url 'admin:provider_editor' provider.id %}" class="inline" onsubmit="return confirm('Delete this provider and all its models?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                    <div class="text-lg mb-2">No providers configured</div>
+                    <p class="text-sm">Add an external Ollama server or Anthropic API to get started</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-6 bg-blue-50 border-l-4 border-blue-400 p-4">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+        </div>
+        <div class="ml-3">
+            <p class="text-sm text-blue-700">
+                <strong>Tip:</strong> After adding a provider, click "Browse Models" to see available models and import the ones you want to use.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

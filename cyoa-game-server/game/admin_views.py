@@ -10,9 +10,12 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count, Q
 from django.conf import settings
+from django.utils import timezone
 from functools import wraps
-from .models import Prompt, AuditLog, Configuration
+from .models import Prompt, AuditLog, Configuration, APIProvider, LLMModel
 from .ollama_utils import get_ollama_models
+from .external_ollama_utils import test_external_ollama_connection, get_external_ollama_models
+from .external_anthropic_utils import test_anthropic_connection, get_anthropic_models
 import markdown2
 
 
@@ -247,7 +250,12 @@ def config_editor(request, config_id=None):
     
     # Get available models
     ollama_models = [model['name'] for model in get_ollama_models()]
-    cloud_models = ['Claude - coming soon']
+    
+    # Get external models from database (imported from providers)
+    external_models = LLMModel.objects.filter(
+        source='external',
+        is_available=True
+    ).select_related('provider')
     
     # Get available prompts
     adventure_prompts = Prompt.objects.exclude(prompt_type='judge').order_by('prompt_type', '-version')
@@ -347,7 +355,7 @@ def config_editor(request, config_id=None):
     context = {
         'config': config,
         'ollama_models': ollama_models,
-        'cloud_models': cloud_models,
+        'external_models': external_models,
         'adventure_prompts': adventure_prompts,
         'judge_prompts': judge_prompts,
     }
@@ -390,3 +398,223 @@ def reset_statistics(request):
     messages.success(request, f'Reset statistics - cleared {count} audit log entries')
     return redirect('admin:dashboard')
 
+
+# API Provider and Model Management Views
+# Add these to the end of admin_views.py
+
+
+@debug_login_bypass
+def provider_list(request):
+    """
+    List all API providers with test status.
+    """
+    providers = APIProvider.objects.all()
+    
+    context = {
+        'providers': providers,
+    }
+    return render(request, 'cyoa_admin/provider_list.html', context)
+
+
+@debug_login_bypass
+def provider_editor(request, provider_id=None):
+    """
+    Create or edit an API provider.
+    """
+    provider = get_object_or_404(APIProvider, pk=provider_id) if provider_id else None
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'test':
+            # Test the connection
+            provider_type = request.POST.get('provider_type')
+            base_url = request.POST.get('base_url', '').strip()
+            api_key = request.POST.get('api_key', '').strip()
+            
+            if provider_type == 'ollama':
+                result = test_external_ollama_connection(base_url)
+            elif provider_type == 'anthropic':
+                result = test_anthropic_connection(api_key)
+            else:
+                result = {'success': False, 'message': 'Unknown provider type'}
+            
+            return JsonResponse(result)
+        
+        if action == 'save':
+            name = request.POST.get('name', '').strip()
+            provider_type = request.POST.get('provider_type')
+            base_url = request.POST.get('base_url', '').strip()
+            api_key = request.POST.get('api_key', '').strip()
+            
+            if not all([name, provider_type]):
+                messages.error(request, 'Name and provider type are required')
+            else:
+                if provider:
+                    # Update existing
+                    provider.name = name
+                    provider.provider_type = provider_type
+                    provider.base_url = base_url
+                    provider.api_key = api_key
+                    provider.save()
+                    messages.success(request, f'Provider "{name}" updated')
+                else:
+                    # Create new
+                    provider = APIProvider.objects.create(
+                        name=name,
+                        provider_type=provider_type,
+                        base_url=base_url,
+                        api_key=api_key,
+                        is_active=True
+                    )
+                    messages.success(request, f'Provider "{name}" created')
+                
+                return redirect('admin:provider_editor', provider_id=provider.id)
+        
+        if action == 'delete' and provider:
+            provider_name = provider.name
+            provider.delete()
+            messages.success(request, f'Provider "{provider_name}" deleted')
+            return redirect('admin:provider_list')
+    
+    context = {
+        'provider': provider,
+    }
+    return render(request, 'cyoa_admin/provider_editor.html', context)
+
+
+@debug_login_bypass
+@require_http_methods(["POST"])
+def test_provider_connection(request):
+    """
+    API endpoint to test provider connection.
+    """
+    import json
+    data = json.loads(request.body)
+    
+    provider_type = data.get('provider_type')
+    base_url = data.get('base_url', '').strip()
+    api_key = data.get('api_key', '').strip()
+    
+    if provider_type == 'ollama':
+        result = test_external_ollama_connection(base_url)
+    elif provider_type == 'anthropic':
+        result = test_anthropic_connection(api_key)
+    else:
+        result = {'success': False, 'message': 'Unknown provider type'}
+    
+    # Update provider test status if provider_id provided
+    provider_id = data.get('provider_id')
+    if provider_id and result['success']:
+        try:
+            provider = APIProvider.objects.get(pk=provider_id)
+            provider.last_tested = timezone.now()
+            provider.test_status = result['message']
+            provider.save()
+        except APIProvider.DoesNotExist:
+            pass
+    
+    return JsonResponse(result)
+
+
+@debug_login_bypass
+def model_list(request):
+    """
+    List all registered LLM models.
+    """
+    models = LLMModel.objects.all().select_related('provider')
+    providers = APIProvider.objects.filter(is_active=True)
+    
+    context = {
+        'models': models,
+        'providers': providers,
+    }
+    return render(request, 'cyoa_admin/model_list.html', context)
+
+
+@debug_login_bypass
+def browse_provider_models(request, provider_id):
+    """
+    Browse available models from a provider and select which to import.
+    """
+    provider = get_object_or_404(APIProvider, pk=provider_id)
+    
+    # Fetch models from provider
+    available_models = []
+    if provider.provider_type == 'ollama':
+        available_models = get_external_ollama_models(provider.base_url)
+    elif provider.provider_type == 'anthropic':
+        available_models = get_anthropic_models(provider.api_key)
+    
+    # Get already imported models for this provider
+    imported_model_ids = set(
+        LLMModel.objects.filter(provider=provider)
+        .values_list('model_identifier', flat=True)
+    )
+    
+    # Mark which models are already imported
+    for model in available_models:
+        model['imported'] = model['id'] in imported_model_ids
+    
+    context = {
+        'provider': provider,
+        'available_models': available_models,
+    }
+    return render(request, 'cyoa_admin/browse_models.html', context)
+
+
+@debug_login_bypass
+@require_http_methods(["POST"])
+def import_models(request):
+    """
+    Import selected models from a provider.
+    """
+    import json
+    data = json.loads(request.body)
+    
+    provider_id = data.get('provider_id')
+    model_ids = data.get('model_ids', [])
+    
+    if not provider_id or not model_ids:
+        return JsonResponse({'success': False, 'message': 'Missing provider or models'})
+    
+    try:
+        provider = APIProvider.objects.get(pk=provider_id)
+        
+        # Fetch full model list from provider
+        if provider.provider_type == 'ollama':
+            available_models = get_external_ollama_models(provider.base_url)
+        elif provider.provider_type == 'anthropic':
+            available_models = get_anthropic_models(provider.api_key)
+        else:
+            return JsonResponse({'success': False, 'message': 'Unknown provider type'})
+        
+        # Import selected models
+        imported_count = 0
+        for model_data in available_models:
+            if model_data['id'] in model_ids:
+                # Create or update model
+                LLMModel.objects.update_or_create(
+                    provider=provider,
+                    model_identifier=model_data['id'],
+                    defaults={
+                        'name': f"{provider.name}: {model_data['name']}",
+                        'source': 'external',
+                        'is_available': True,
+                        'capabilities': {
+                            'description': model_data.get('description', ''),
+                            'size': model_data.get('size', 0),
+                        }
+                    }
+                )
+                imported_count += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Imported {imported_count} models from {provider.name}'
+        })
+    
+    except APIProvider.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Provider not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})

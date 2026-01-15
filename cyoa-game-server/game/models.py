@@ -313,3 +313,128 @@ class ResponseCache(models.Model):
         deleted_count, _ = cls.objects.filter(created_at__lt=cutoff).delete()
         return deleted_count
 
+
+class APIProvider(models.Model):
+    """
+    External API provider configurations (external Ollama, Anthropic, etc.)
+    """
+    PROVIDER_TYPES = [
+        ('ollama', 'Ollama Server'),
+        ('anthropic', 'Anthropic (Claude)'),
+    ]
+    
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        help_text="Friendly name for this provider (e.g., 'Office Ollama', 'My Anthropic')"
+    )
+    provider_type = models.CharField(
+        max_length=50,
+        choices=PROVIDER_TYPES,
+        help_text="Type of API provider"
+    )
+    base_url = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Base URL for API (e.g., 'http://192.168.1.100:11434' for Ollama)"
+    )
+    api_key = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="API key for authentication (if required)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this provider is currently active"
+    )
+    last_tested = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time connection was successfully tested"
+    )
+    test_status = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Result of last connection test"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['provider_type', 'name']
+    
+    def __str__(self):
+        status = " ✓" if self.is_active else " ✗"
+        return f"{self.name} ({self.provider_type}){status}"
+
+
+class LLMModel(models.Model):
+    """
+    Registered LLM models (local or external) with routing information.
+    Replaces name-based routing logic with explicit database configuration.
+    """
+    MODEL_SOURCES = [
+        ('local_ollama', 'Local Ollama'),
+        ('external', 'External Provider'),
+    ]
+    
+    name = models.CharField(
+        max_length=200,
+        unique=True,
+        help_text="Display name for this model (shown in config dropdowns)"
+    )
+    model_identifier = models.CharField(
+        max_length=200,
+        help_text="Backend model identifier (e.g., 'qwen3:4b', 'claude-opus-4')"
+    )
+    source = models.CharField(
+        max_length=50,
+        choices=MODEL_SOURCES,
+        help_text="Where this model is hosted"
+    )
+    provider = models.ForeignKey(
+        APIProvider,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="External provider (if source is 'external')"
+    )
+    is_available = models.BooleanField(
+        default=True,
+        help_text="Whether this model is currently available for use"
+    )
+    capabilities = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Model capabilities and metadata"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['source', 'name']
+    
+    def __str__(self):
+        status = "✓" if self.is_available else "✗"
+        source_icon = "🖥️" if self.source == 'local_ollama' else "🌐"
+        return f"{source_icon} {self.name} {status}"
+    
+    def get_routing_info(self):
+        """
+        Return routing information for call_llm to use.
+        """
+        if self.source == 'local_ollama':
+            return {
+                'type': 'local_ollama',
+                'model': self.model_identifier
+            }
+        elif self.source == 'external' and self.provider:
+            return {
+                'type': self.provider.provider_type,
+                'model': self.model_identifier,
+                'base_url': self.provider.base_url,
+                'api_key': self.provider.api_key
+            }
+        else:
+            raise ValueError(f"Cannot determine routing for model {self.name}")
+
