@@ -2,11 +2,13 @@
 URL configuration for admin interface.
 """
 from django.urls import path
+from django.views.generic import RedirectView
 from . import admin_views
 
 app_name = 'admin'
 
 urlpatterns = [
+    path('', RedirectView.as_view(url='dashboard/', permanent=False), name='index'),
     path('dashboard/', admin_views.dashboard, name='dashboard'),
     path('audit/', admin_views.audit_log, name='audit_log'),
     path('audit/<int:log_id>/', admin_views.audit_detail, name='audit_detail'),

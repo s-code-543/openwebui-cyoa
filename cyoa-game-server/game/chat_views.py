@@ -326,3 +326,22 @@ def chat_api_list_conversations(request):
         return JsonResponse({'conversations': conversations_data})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def chat_api_delete_conversation(request, conversation_id):
+    """
+    Delete a conversation by marking its game session as over.
+    """
+    try:
+        # Mark game session as over
+        game_session = GameSession.objects.get(session_id=conversation_id)
+        game_session.game_over = True
+        game_session.save()
+        
+        return JsonResponse({'success': True})
+    except GameSession.DoesNotExist:
+        return JsonResponse({'error': 'Game not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

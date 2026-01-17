@@ -17,6 +17,7 @@ urlpatterns = [
     path('chat/api/send', chat_views.chat_api_send_message, name='chat_api_send'),
     path('chat/api/conversation/<str:conversation_id>', chat_views.chat_api_get_conversation, name='chat_api_get'),
     path('chat/api/conversations', chat_views.chat_api_list_conversations, name='chat_api_list'),
+    path('chat/api/delete/<str:conversation_id>', chat_views.chat_api_delete_conversation, name='chat_api_delete'),
     
     # Admin interface
     path('admin/', include(('game.admin_urls', 'app'), namespace='admin')),

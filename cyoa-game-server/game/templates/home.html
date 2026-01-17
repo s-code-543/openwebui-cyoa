@@ -38,22 +38,31 @@
                 <h2 class="text-2xl font-bold text-gray-900 mb-4">Continue Your Adventure</h2>
                 <div class="space-y-3">
                     {% for game in recent_games %}
-                    <a href="/chat/?conversation_id={{ game.conversation_id }}" 
-                       class="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 border border-gray-200">
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900">{{ game.title }}</p>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    Turn {{ game.turn_number }}/{{ game.max_turns }} • {{ game.updated_at|timesince }} ago
-                                </p>
+                    <div class="flex items-center gap-2">
+                        <a href="/chat/?conversation_id={{ game.conversation_id }}" 
+                           class="flex-1 block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 border border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-gray-900">{{ game.title }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Turn {{ game.turn_number }}/{{ game.max_turns }} • {{ game.updated_at|timesince }} ago
+                                    </p>
+                                </div>
+                                <div class="ml-4">
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                        Continue →
+                                    </span>
+                                </div>
                             </div>
-                            <div class="ml-4">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                    Continue →
-                                </span>
-                            </div>
-                        </div>
-                    </a>
+                        </a>
+                        <button onclick="deleteGame('{{ game.conversation_id }}')" 
+                                class="flex-shrink-0 p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete game">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
                     {% endfor %}
                 </div>
             </div>
@@ -107,5 +116,29 @@
             </div>
         </div>
     </div>
+
+    <script>
+    async function deleteGame(conversationId) {
+        if (!confirm('Delete this game? This cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/chat/api/delete/${conversationId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+                // Reload page to update list
+                window.location.reload();
+            } else {
+                alert('Failed to delete game');
+            }
+        } catch (error) {
+            alert('Error deleting game: ' + error.message);
+        }
+    }
+    </script>
 </body>
 </html>
