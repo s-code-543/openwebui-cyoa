@@ -4,3 +4,4 @@ ssl/*
 .env
 *.pyc
 __pycache__/
+*.webm

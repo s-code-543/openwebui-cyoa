@@ -6,6 +6,7 @@
     <title>CYOA Adventure</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="/static/js/recorder.js"></script>
     <style>
         [x-cloak] { display: none !important; }
         html, body { 
@@ -13,6 +14,20 @@
             overflow: hidden;
             margin: 0;
             padding: 0;
+        }
+        
+        /* Level meter animation */
+        .level-bar {
+            transition: height 0.05s ease-out;
+        }
+        
+        /* Pulse animation for recording indicator */
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-red {
+            animation: pulse-red 1s ease-in-out infinite;
         }
     </style>
 </head>
@@ -101,68 +116,166 @@
 
   <!-- Fixed Bottom: Controls -->
   <div class="flex-none border-t border-gray-300 bg-gray-50 px-2 pt-1.5 pb-[calc(env(safe-area-inset-bottom,0px)+6px)]">
-    <!-- Start game button (before game starts) -->
-    <div x-show="!gameStarted" class="flex items-center gap-2 mb-1.5">
-      <button
-        @click="startGame()"
-        :disabled="isLoading"
-        class="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm whitespace-nowrap"
-      >
-        Start a new game
-      </button>
-      <span class="text-xs text-gray-600">or write your own opening below</span>
+    
+    <!-- Recording HUD (replaces composer when recording/processing/error) -->
+    <div x-show="recorderState !== 'idle' && recorderState !== 'success'" x-cloak class="space-y-2">
+      
+      <!-- Recording state: show level meter + timer + stop button -->
+      <template x-if="recorderState === 'recording'">
+        <div class="space-y-2">
+          <!-- Level meter -->
+          <div class="h-12 bg-gray-200 rounded flex items-end justify-center gap-0.5 px-1 overflow-hidden" x-ref="levelMeterContainer">
+            <template x-for="i in 32" :key="i">
+              <div 
+                class="level-bar bg-red-500 rounded-t w-2"
+                :style="`height: ${Math.max(4, recorderLevel * 100 * (0.5 + Math.random() * 0.5))}%`"
+              ></div>
+            </template>
+          </div>
+          
+          <!-- Timer and controls -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse-red"></div>
+              <span class="text-lg font-mono font-bold text-gray-800" x-text="recorderTimeDisplay">00:00</span>
+            </div>
+            
+            <div class="flex gap-2">
+              <button
+                @click="cancelRecording()"
+                class="px-3 py-1.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                @click="stopRecording()"
+                class="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium"
+              >
+                ⏹ Stop
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+      
+      <!-- Processing state: show spinner + status -->
+      <template x-if="recorderState === 'processing'">
+        <div class="py-4 text-center space-y-2">
+          <div class="flex justify-center">
+            <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <p class="text-sm text-gray-600">Transcribing audio...</p>
+          <p class="text-xs text-gray-500">Your recording is saved locally. You can refresh and retry if needed.</p>
+        </div>
+      </template>
+      
+      <!-- Error state: show error + retry/discard buttons -->
+      <template x-if="recorderState === 'error'">
+        <div class="py-3 space-y-3">
+          <div class="p-3 bg-red-50 border border-red-200 rounded">
+            <p class="text-red-800 text-sm font-medium">Transcription failed</p>
+            <p class="text-red-700 text-xs mt-1" x-text="recorderError">Unknown error</p>
+          </div>
+          
+          <div class="flex gap-2 justify-center">
+            <button
+              @click="downloadRecording()"
+              class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+              title="Download recording"
+            >
+              💾 Download
+            </button>
+            <button
+              @click="discardRecording()"
+              class="px-3 py-1.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm font-medium"
+            >
+              Discard
+            </button>
+            <button
+              @click="retryTranscription()"
+              class="px-4 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium"
+            >
+              🔄 Retry
+            </button>
+          </div>
+          
+          <p class="text-xs text-gray-500 text-center">
+            Your recording is saved. You can retry or download it.
+          </p>
+        </div>
+      </template>
     </div>
+    
+    <!-- Normal composer UI (when not recording) -->
+    <div x-show="recorderState === 'idle' || recorderState === 'success'">
+      <!-- Start game button (before game starts) -->
+      <div x-show="!gameStarted" class="flex items-center gap-2 mb-1.5">
+        <button
+          @click="startGame()"
+          :disabled="isLoading"
+          class="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm whitespace-nowrap"
+        >
+          Start a new game
+        </button>
+        <span class="text-xs text-gray-600">or write your own opening below</span>
+      </div>
 
-    <!-- Choice buttons (after game starts) -->
-    <div x-show="gameStarted" class="grid grid-cols-2 gap-1.5 mb-1.5">
-      <button
-        @click="sendChoice(1)"
-        :disabled="isLoading || !choice1Text.trim()"
-        class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
-        title="Choice 1"
-        x-text="choice1Text || 'Waiting for choices…'"
-      >
-      </button>
+      <!-- Choice buttons (after game starts) -->
+      <div x-show="gameStarted" class="grid grid-cols-2 gap-1.5 mb-1.5">
+        <button
+          @click="sendChoice(1)"
+          :disabled="isLoading || !choice1Text.trim()"
+          class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
+          title="Choice 1"
+          x-text="choice1Text || 'Waiting for choices…'"
+        >
+        </button>
 
-      <button
-        @click="sendChoice(2)"
-        :disabled="isLoading || !choice2Text.trim()"
-        class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
-        title="Choice 2"
-        x-text="choice2Text || 'Waiting for choices…'"
-      >
-      </button>
-    </div>
+        <button
+          @click="sendChoice(2)"
+          :disabled="isLoading || !choice2Text.trim()"
+          class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
+          title="Choice 2"
+          x-text="choice2Text || 'Waiting for choices…'"
+        >
+        </button>
+      </div>
 
-    <!-- Text input row -->
-    <div class="flex gap-1.5">
-      <textarea
-        x-model="inputMessage"
-        @keydown.enter.prevent="sendMessage()"
-        @input="autoResize($event.target)"
-        x-ref="messageInput"
-        :disabled="isLoading"
-        placeholder="Type your action…"
-        rows="1"
-        class="flex-1 px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent text-sm resize-none overflow-hidden"
-        style="min-height: 34px; max-height: 130px;"
-      ></textarea>
+      <!-- Text input row -->
+      <div class="flex gap-1.5">
+        <textarea
+          x-model="inputMessage"
+          @keydown.enter.prevent="sendMessage()"
+          @input="autoResize($event.target); saveDraft()"
+          x-ref="messageInput"
+          :disabled="isLoading"
+          placeholder="Type your action…"
+          rows="1"
+          class="flex-1 px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent text-sm resize-none overflow-hidden"
+          style="min-height: 34px; max-height: 130px;"
+        ></textarea>
 
-      <button
-        @click="sendMessage()"
-        :disabled="isLoading || !inputMessage.trim()"
-        class="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm"
-      >
-        Send
-      </button>
+        <button
+          @click="sendMessage()"
+          :disabled="isLoading || !inputMessage.trim()"
+          class="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm"
+        >
+          Send
+        </button>
 
-      <button
-        class="px-2 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-        title="Record audio (coming soon)"
-        disabled
-      >
-        🎤
-      </button>
+        <button
+          @click="toggleRecording()"
+          :disabled="isLoading"
+          :class="recorderState === 'idle' ? 'bg-gray-200 hover:bg-red-100 hover:text-red-600' : 'bg-red-500 text-white'"
+          class="px-2 py-1.5 text-gray-700 rounded text-sm transition-colors"
+          :title="recorderState === 'idle' ? 'Start recording' : 'Recording...'"
+        >
+          🎤
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -178,24 +291,187 @@ function chatApp() {
     errorMessage: '',
     gameStarted: false,
 
-    // Game-state placeholders (wire to backend later)
+    // Game-state placeholders
     inventoryItems: [],
     turnCurrent: 0,
     turnMax: 20,
 
-    // Choice placeholders (wire to backend extraction later)
+    // Choice placeholders
     choice1Text: '',
     choice2Text: '',
+    
+    // Recording state
+    recorderState: 'idle',  // idle, recording, processing, error, success
+    recorderError: '',
+    recorderLevel: 0,
+    recorderTimeDisplay: '00:00',
+    recorderInitialized: false,
 
-    init() {
+    async init() {
       const urlParams = new URLSearchParams(window.location.search);
       const convId = urlParams.get('conversation_id');
 
       if (convId) {
-        this.loadConversation(convId);
+        await this.loadConversation(convId);
       } else {
-        this.newConversation();
+        await this.newConversation();
       }
+      
+      // Initialize recorder
+      await this.initRecorder();
+    },
+    
+    async initRecorder() {
+      if (this.recorderInitialized) return;
+      
+      try {
+        const pending = await CYOARecorder.init({
+          onStateChange: (state, error) => {
+            this.recorderState = state;
+            this.recorderError = error || '';
+            
+            // If success, the transcript will be handled by onTranscriptReady
+            if (state === 'success') {
+              // Brief delay then return to idle
+              setTimeout(() => {
+                this.recorderState = 'idle';
+              }, 100);
+            }
+          },
+          onTranscriptReady: (transcript) => {
+            this.insertTranscript(transcript);
+            // Once inserted, we can discard the recording so it doesn't come back on reload
+            CYOARecorder.discardRecording();
+          },
+          onLevelUpdate: (level) => {
+            this.recorderLevel = level;
+          },
+          onTimeUpdate: (ms) => {
+            this.recorderTimeDisplay = CYOARecorder.formatTime(ms);
+          }
+        });
+        
+        this.recorderInitialized = true;
+        
+        // Load any saved draft text
+        const savedDraft = CYOARecorder.loadDraftText();
+        if (savedDraft && !this.inputMessage) {
+          this.inputMessage = savedDraft;
+        }
+        
+        // Handle pending recording from page reload
+        if (pending) {
+          console.log('Found pending recording:', pending);
+          
+          if (pending.status === 'transcribed' && pending.transcript) {
+            // Already transcribed, insert it
+            this.insertTranscript(pending.transcript);
+            CYOARecorder.discardRecording();
+          } else if (pending.status === 'failed') {
+            // Show error state so user can retry
+            this.recorderState = 'error';
+            this.recorderError = pending.error || 'Previous transcription failed';
+          } else if (pending.status === 'processing' || pending.status === 'pending') {
+            // Show processing state and retry
+            this.recorderState = 'processing';
+            setTimeout(() => {
+              CYOARecorder.retryTranscription();
+            }, 500);
+          }
+        }
+        
+      } catch (e) {
+        console.error('Failed to initialize recorder:', e);
+      }
+    },
+    
+    toggleRecording() {
+      if (this.recorderState === 'idle') {
+        CYOARecorder.startRecording();
+      } else if (this.recorderState === 'recording') {
+        CYOARecorder.stopRecording();
+      }
+    },
+    
+    stopRecording() {
+      CYOARecorder.stopRecording();
+    },
+    
+    cancelRecording() {
+      // Use the new cancelRecording method from the recorder module
+      CYOARecorder.cancelRecording();
+    },
+    
+    retryTranscription() {
+      CYOARecorder.retryTranscription();
+    },
+    
+    discardRecording() {
+      CYOARecorder.discardRecording();
+    },
+    
+    downloadRecording() {
+      CYOARecorder.downloadRecording();
+    },
+    
+    insertTranscript(transcript) {
+      if (!transcript) return;
+      
+      const textarea = this.$refs.messageInput;
+      const currentText = this.inputMessage;
+      
+      if (!textarea) {
+        // Fallback: just append
+        this.inputMessage = currentText ? currentText + ' ' + transcript : transcript;
+        return;
+      }
+      
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      if (start !== end) {
+        // Replace selection
+        this.inputMessage = currentText.slice(0, start) + transcript + currentText.slice(end);
+        // Set cursor after inserted text
+        this.$nextTick(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + transcript.length;
+          textarea.focus();
+        });
+      } else if (currentText) {
+        // Append with space at cursor position
+        const before = currentText.slice(0, start);
+        const after = currentText.slice(start);
+        const needsSpace = before && !before.endsWith(' ') && !before.endsWith('\n');
+        this.inputMessage = before + (needsSpace ? ' ' : '') + transcript + after;
+        this.$nextTick(() => {
+          const newPos = start + (needsSpace ? 1 : 0) + transcript.length;
+          textarea.selectionStart = textarea.selectionEnd = newPos;
+          textarea.focus();
+        });
+      } else {
+        // Empty input, just set the transcript
+        this.inputMessage = transcript;
+        this.$nextTick(() => {
+          textarea.focus();
+        });
+      }
+      
+      // Auto-resize textarea
+      this.$nextTick(() => {
+        // Use a small timeout to ensure DOM update is complete before resizing
+        setTimeout(() => {
+            this.autoResize(textarea);
+            // Save draft with the new transcript so it persists on reload
+            this.saveDraft();
+        }, 10);
+      });
+      
+      // We process the draft saving in the timeout above, so we don't clear it here
+      // CYOARecorder.clearDraftText();
+    },
+    
+    saveDraft() {
+      CYOARecorder.saveDraftText(this.inputMessage);
     },
 
     async newConversation() {
@@ -243,14 +519,9 @@ function chatApp() {
           this.conversationId = data.conversation_id;
           this.conversationTitle = data.title;
           this.messages = data.messages || [];
+          
+          this.restoreGameState();
           this.scrollToBottom();
-
-          // If your backend starts returning these, you can assign them here:
-          // this.inventoryItems = data.inventory || [];
-          // this.turnCurrent = data.turn_current ?? this.turnCurrent;
-          // this.turnMax = data.turn_max ?? this.turnMax;
-          // this.choice1Text = data.choice1 ?? '';
-          // this.choice2Text = data.choice2 ?? '';
         }
       } catch (error) {
         this.errorMessage = 'Failed to load conversation: ' + error.message;
@@ -274,6 +545,9 @@ function chatApp() {
 
       const userMessage = this.inputMessage.trim();
       this.inputMessage = '';
+      
+      // Clear draft
+      CYOARecorder.clearDraftText();
       
       // Reset textarea height
       if (this.$refs.messageInput) {
@@ -313,8 +587,7 @@ function chatApp() {
           // Mark game as started once we get a response
           this.gameStarted = true;
 
-          // If backend returns state, update it here (recommended contract):
-          // data.state = { inventory: [...], turn_current: 3, turn_max: 20, choice1: "...", choice2: "..." }
+          // Update game state if backend returns it
           if (data.state) {
             if (Array.isArray(data.state.inventory)) this.inventoryItems = data.state.inventory;
             if (typeof data.state.turn_current === 'number') this.turnCurrent = data.state.turn_current;
@@ -333,11 +606,47 @@ function chatApp() {
     scrollToBottom() {
       this.$nextTick(() => {
         const container = this.$refs.messagesContainer;
-        container.scrollTop = container.scrollHeight;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
       });
     },
 
+    restoreGameState() {
+      if (this.messages.length === 0) {
+        this.gameStarted = false;
+        return;
+      }
+
+      this.gameStarted = true;
+      
+      // Find the last assistant message to extract state
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        if (this.messages[i].role === 'assistant') {
+          const text = this.messages[i].content;
+          
+          // Extract Turn X of Y
+          const turnMatch = text.match(/Turn\s+(\d+)\s+(?:of|\/)\s+(\d+)/i);
+          if (turnMatch) {
+            this.turnCurrent = parseInt(turnMatch[1]);
+            this.turnMax = parseInt(turnMatch[2]);
+          }
+          
+          // Extract choices "1) ... 2) ..."
+          const choice1Match = text.match(/1\)\s*(.+?)(?=\n|$)/);
+          const choice2Match = text.match(/2\)\s*(.+?)(?=\n|$)/);
+          
+          if (choice1Match) this.choice1Text = choice1Match[1].trim();
+          if (choice2Match) this.choice2Text = choice2Match[1].trim();
+          
+          break;
+        }
+      }
+    },
+
     autoResize(textarea) {
+      if (!textarea) return;
+      
       // Reset height to get accurate scrollHeight
       textarea.style.height = '34px';
       

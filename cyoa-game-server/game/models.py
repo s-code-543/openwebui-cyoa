@@ -4,6 +4,7 @@ Models for CYOA game server.
 from django.db import models
 from django.utils import timezone
 import hashlib
+import uuid
 
 
 class Prompt(models.Model):
@@ -685,3 +686,78 @@ class ChatMessage(models.Model):
     def __str__(self):
         preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"{self.role}: {preview}"
+
+
+class STTRecording(models.Model):
+    """
+    Store audio recordings for speech-to-text transcription.
+    Tracks upload, transcription status, and transcript text.
+    """
+    STATUS_CHOICES = [
+        ('uploaded', 'Uploaded'),
+        ('processing', 'Processing'),
+        ('transcribed', 'Transcribed'),
+        ('failed', 'Failed'),
+        ('deleted', 'Deleted'),
+    ]
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="Unique identifier for the recording"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text="When the recording was uploaded"
+    )
+    
+    file_path = models.CharField(
+        max_length=500,
+        help_text="Path to the stored audio file relative to MEDIA_ROOT"
+    )
+    
+    mime_type = models.CharField(
+        max_length=100,
+        default='audio/webm',
+        help_text="MIME type of the uploaded audio"
+    )
+    
+    duration_seconds = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Duration of the recording in seconds"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='uploaded',
+        db_index=True,
+        help_text="Current status of the recording"
+    )
+    
+    transcript_text = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Transcribed text from the audio"
+    )
+    
+    error_text = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Error message if transcription failed"
+    )
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Recording {self.id} - {self.status}"
