@@ -27,6 +27,11 @@ urlpatterns = [
     path('models/browse/<int:provider_id>/', admin_views.browse_provider_models, name='browse_provider_models'),
     path('models/import/', admin_views.import_models, name='import_models'),
     
+    # Difficulty Profile Management
+    path('difficulty/', admin_views.difficulty_list, name='difficulty_list'),
+    path('difficulty/new/', admin_views.difficulty_editor, name='difficulty_new'),
+    path('difficulty/<int:difficulty_id>/', admin_views.difficulty_editor, name='difficulty_editor'),
+    
     # API endpoints
     path('api/preview-markdown/', admin_views.preview_markdown, name='preview_markdown'),
     path('api/refresh-models/', admin_views.refresh_models, name='refresh_models'),

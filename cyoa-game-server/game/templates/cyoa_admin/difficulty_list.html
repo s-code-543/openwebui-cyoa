@@ -1,0 +1,77 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}Difficulty Profiles{% endblock %}
+
+{% block content %}
+<style>
+.difficulty-preview {
+    opacity: var(--preview-opacity);
+}
+</style>
+<div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Difficulty Profiles</h1>
+        <a href="{% url 'admin:difficulty_new' %}" 
+           class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
+            + New Profile
+        </a>
+    </div>
+
+    {% if difficulties %}
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preview</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for difficulty in difficulties %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">{{ difficulty.name }}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-600">{{ difficulty.description|truncatewords:15 }}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex gap-1">
+                            {% for point in difficulty.curve_points %}
+                            <div class="w-8 h-8 bg-gradient-to-t from-red-500 to-gray-200 rounded difficulty-preview" 
+                                 data-opacity="{{ point }}"
+                                 title="{{ point|floatformat:2 }}"></div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <a href="{% url 'admin:difficulty_editor' difficulty.id %}" 
+                           class="text-indigo-600 hover:text-indigo-900 mr-4">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="bg-white shadow-md rounded-lg p-8 text-center">
+        <p class="text-gray-500 mb-4">No difficulty profiles yet.</p>
+        <a href="{% url 'admin:difficulty_new' %}" 
+           class="text-indigo-600 hover:text-indigo-900 font-medium">
+            Create your first difficulty profile
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Apply opacity from data attributes to avoid Django template tag syntax errors
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.difficulty-preview').forEach(el => {
+        const opacity = el.getAttribute('data-opacity');
+        el.style.opacity = opacity;
+    });
+});
+</script>{% endblock %}

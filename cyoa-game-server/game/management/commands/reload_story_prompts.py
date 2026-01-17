@@ -1,5 +1,6 @@
 """
 Management command to reload adventure/system prompts from cyoa_story_prompts directory.
+Also loads the game-ending prompt from the game directory.
 Updates existing prompts in-place to avoid foreign key issues.
 Use this after updating the prompt .txt files with template variables.
 """
@@ -10,7 +11,7 @@ import glob
 
 
 class Command(BaseCommand):
-    help = 'Reload adventure prompts from cyoa_story_prompts directory (updates in-place)'
+    help = 'Reload adventure prompts from cyoa_story_prompts directory and game-ending prompt (updates in-place)'
 
     def handle(self, *args, **options):
         # Path to story prompts directory
@@ -70,6 +71,34 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.SUCCESS(f"  ✓ Updated: {description} (v1) - type: {adventure_type}"))
                 updated_count += 1
+        
+        # Load game-ending prompt from game directory
+        self.stdout.write(f"\nLoading game-ending prompt...")
+        game_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        game_ending_path = os.path.join(game_dir, 'game-ending-prompt.txt')
+        
+        if os.path.exists(game_ending_path):
+            with open(game_ending_path, 'r', encoding='utf-8') as f:
+                game_ending_text = f.read().strip()
+            
+            prompt, created = Prompt.objects.update_or_create(
+                prompt_type='game-ending',
+                version=1,
+                defaults={
+                    'description': 'Game Ending (Death/Failure) Prompt',
+                    'prompt_text': game_ending_text,
+                    'is_active': True  # Auto-activate as it's the only one
+                }
+            )
+            
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"  ✓ Created: Game Ending Prompt (v1) [ACTIVE]"))
+                created_count += 1
+            else:
+                self.stdout.write(self.style.SUCCESS(f"  ✓ Updated: Game Ending Prompt (v1) [ACTIVE]"))
+                updated_count += 1
+        else:
+            self.stdout.write(self.style.WARNING(f"  ⚠ Game ending prompt not found at: {game_ending_path}"))
         
         self.stdout.write(self.style.SUCCESS(f"\nStory prompts reloaded successfully!"))
         self.stdout.write(self.style.SUCCESS(f"Created: {created_count}, Updated: {updated_count}"))

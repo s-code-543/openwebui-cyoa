@@ -1,0 +1,293 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}{% if difficulty %}Edit{% else %}New{% endif %} Difficulty Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'admin:difficulty_list' %}" class="text-indigo-600 hover:text-indigo-900">
+            ← Back to Difficulty Profiles
+        </a>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">
+        {% if difficulty %}Edit{% else %}New{% endif %} Difficulty Profile
+    </h1>
+
+    <form method="post" class="bg-white shadow-md rounded-lg p-6">
+        {% csrf_token %}
+        
+        <div class="mb-6">
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+            <input type="text" name="name" id="name" required
+                   value="{{ difficulty.name|default:'' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        </div>
+
+        <div class="mb-6">
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea name="description" id="description" rows="3"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">{{ difficulty.description|default:'' }}</textarea>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Difficulty Mode</label>
+            <div class="flex gap-4 mb-4">
+                <label class="flex items-center">
+                    <input type="radio" name="mode" value="curve" checked class="mr-2 mode-toggle" data-mode="curve">
+                    <span>Curve Editor (5 points)</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="mode" value="function" class="mr-2 mode-toggle" data-mode="function">
+                    <span>Custom Function</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Curve Editor -->
+        <div id="curve-editor" class="mb-6">
+            <div class="bg-gray-50 p-6 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Death Probability Curve</h3>
+                <p class="text-sm text-gray-600 mb-4">Adjust the sliders to set death probability at different points in the game.</p>
+                
+                <div class="space-y-4">
+                    {% for i in "01234" %}
+                    <div class="flex items-center gap-4">
+                        <label class="w-24 text-sm font-medium text-gray-700">
+                            {% if forloop.counter0 == 0 %}Start (0%)
+                            {% elif forloop.counter0 == 1 %}25%
+                            {% elif forloop.counter0 == 2 %}50%
+                            {% elif forloop.counter0 == 3 %}75%
+                            {% else %}End (100%){% endif %}
+                        </label>
+                        <input type="range" name="curve_{{ forloop.counter0 }}" id="curve_{{ forloop.counter0 }}"
+                               min="0" max="1" step="0.05"
+                               value="0"
+                               data-index="{{ forloop.counter0 }}"
+                               class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider">
+                        <span id="curve_value_{{ forloop.counter0 }}" class="w-16 text-sm font-mono text-gray-700">0.00</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Visual Preview -->
+                <div class="mt-6">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Visual Preview</h4>
+                    <canvas id="curve-canvas" width="600" height="200" class="border border-gray-300 rounded-lg bg-white"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Function Editor -->
+        <div id="function-editor" class="mb-6 hidden">
+            <div class="bg-gray-50 p-6 rounded-lg">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Custom Function</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Enter a Python expression. Available variables: <code class="bg-gray-200 px-1 rounded">x</code> (current turn), 
+                    <code class="bg-gray-200 px-1 rounded">n</code> (max turns). Return value should be between 0.0 and 1.0.
+                </p>
+                <p class="text-sm text-gray-500 mb-2">Examples:</p>
+                <ul class="text-sm text-gray-500 mb-4 list-disc list-inside">
+                    <li><code class="bg-gray-200 px-1 rounded">0.05 + 0.35 * (x/n)**2</code> - Exponential ramp</li>
+                    <li><code class="bg-gray-200 px-1 rounded">0.4 * (x/n)</code> - Linear ramp to 40%</li>
+                    <li><code class="bg-gray-200 px-1 rounded">0 if x < 3 else 0.3</code> - Grace period then 30%</li>
+                </ul>
+                <textarea name="function" id="function" rows="4"
+                          class="w-full px-3 py-2 font-mono text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">{{ difficulty.function|default:'0.05 + 0.35 * (x/n)**2' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Hidden field for generated function from curve -->
+        <input type="hidden" name="generated_function" id="generated_function" value="">
+
+        <div class="flex justify-end gap-4">
+            <a href="{% url 'admin:difficulty_list' %}" 
+               class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">
+                Cancel
+            </a>
+            <button type="submit" 
+                    class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">
+                Save Profile
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Pass existing curve points to JavaScript via data attribute -->
+<div id="curve-data" 
+     data-points='{% if difficulty and difficulty.curve_points %}{{ difficulty.curve_points|safe }}{% else %}[0, 0, 0, 0, 0]{% endif %}'
+     style="display:none;">
+</div>
+
+<script>
+// Toggle between curve and function mode
+function toggleMode(mode) {
+    const curveEditor = document.getElementById('curve-editor');
+    const functionEditor = document.getElementById('function-editor');
+    
+    if (mode === 'curve') {
+        curveEditor.classList.remove('hidden');
+        functionEditor.classList.add('hidden');
+    } else {
+        curveEditor.classList.add('hidden');
+        functionEditor.classList.remove('hidden');
+    }
+}
+
+// Attach event listeners after DOM loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Mode toggle listeners
+    document.querySelectorAll('.mode-toggle').forEach(radio => {
+        radio.addEventListener('change', function() {
+            toggleMode(this.dataset.mode);
+        });
+    });
+    
+    // Slider input listeners
+    for (let i = 0; i < 5; i++) {
+        const slider = document.getElementById(`curve_${i}`);
+        if (slider) {
+            slider.addEventListener('input', function() {
+                updateCurveValue(i, this.value);
+            });
+        }
+    }
+});
+
+// Update curve value display
+function updateCurveValue(index, value) {
+    document.getElementById(`curve_value_${index}`).textContent = parseFloat(value).toFixed(2);
+    drawCurve();
+}
+
+// Draw the curve visualization
+function drawCurve() {
+    const canvas = document.getElementById('curve-canvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Get curve points
+    const points = [];
+    for (let i = 0; i < 5; i++) {
+        const slider = document.getElementById(`curve_${i}`);
+        points.push(parseFloat(slider.value));
+    }
+    
+    // Draw grid
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, i * height / 10);
+        ctx.lineTo(width, i * height / 10);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(i * width / 10, 0);
+        ctx.lineTo(i * width / 10, height);
+        ctx.stroke();
+    }
+    
+    // Draw curve
+    ctx.strokeStyle = '#4f46e5';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    
+    // Piecewise linear interpolation between the 5 points
+    const segments = [
+        {x: 0, y: points[0]},
+        {x: 0.25, y: points[1]},
+        {x: 0.50, y: points[2]},
+        {x: 0.75, y: points[3]},
+        {x: 1.0, y: points[4]}
+    ];
+    
+    ctx.moveTo(0, height - (segments[0].y * height));
+    
+    for (let i = 0; i < segments.length - 1; i++) {
+        const x1 = segments[i].x * width;
+        const y1 = height - (segments[i].y * height);
+        const x2 = segments[i + 1].x * width;
+        const y2 = height - (segments[i + 1].y * height);
+        
+        ctx.lineTo(x2, y2);
+    }
+    
+    ctx.stroke();
+    
+    // Draw points
+    ctx.fillStyle = '#4f46e5';
+    segments.forEach(seg => {
+        ctx.beginPath();
+        ctx.arc(seg.x * width, height - (seg.y * height), 6, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+}
+
+// Generate function from curve on form submit
+document.querySelector('form').addEventListener('submit', function(e) {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    
+    if (mode === 'curve') {
+        const points = [];
+        for (let i = 0; i < 5; i++) {
+            points.push(parseFloat(document.getElementById(`curve_${i}`).value));
+        }
+        
+        // Generate piecewise linear function
+        const p0 = points[0], p1 = points[1], p2 = points[2], p3 = points[3], p4 = points[4];
+        const func = `(${p0} if x == 0 else ${p0} + (${p1} - ${p0}) * (x / (n * 0.25)) if x / n <= 0.25 else ${p1} + (${p2} - ${p1}) * ((x / n - 0.25) / 0.25) if x / n <= 0.50 else ${p2} + (${p3} - ${p2}) * ((x / n - 0.50) / 0.25) if x / n <= 0.75 else ${p3} + (${p4} - ${p3}) * ((x / n - 0.75) / 0.25))`;
+        
+        document.getElementById('generated_function').value = func;
+        
+        // Also store curve points as JSON in a hidden field
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'curve_points_json';
+        input.value = JSON.stringify(points);
+        this.appendChild(input);
+    }
+});
+
+// Initialize curve drawing
+if (document.getElementById('curve-editor').classList.contains('hidden') === false) {
+    // Load existing curve points if editing
+    const curveData = document.getElementById('curve-data');
+    if (curveData) {
+        const existingPoints = JSON.parse(curveData.dataset.points);
+        for (let i = 0; i < 5 && i < existingPoints.length; i++) {
+            const slider = document.getElementById(`curve_${i}`);
+            if (slider) {
+                slider.value = existingPoints[i];
+                document.getElementById(`curve_value_${i}`).textContent = parseFloat(existingPoints[i]).toFixed(2);
+            }
+        }
+    }
+    drawCurve();
+}
+</script>
+
+<style>
+.slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4f46e5;
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4f46e5;
+    cursor: pointer;
+    border: none;
+}
+</style>
+{% endblock %}

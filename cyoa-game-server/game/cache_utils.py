@@ -19,30 +19,39 @@ class ResponseCache:
     
     def generate_key(self, messages, system_prompt=None):
         """
-        Generate a session-based cache key.
-        
-        Uses a hash of the first user message (to identify the game session)
-        plus the turn number (message count).
-        
-        This gives session isolation without complex full-chain hashing.
-        
-        Args:
-            messages: List of message dicts
-            system_prompt: Optional system prompt string (ignored)
-        
-        Returns:
-            String key in format "session_hash-turn_number"
+        Generate cache key from session ID.
+        Looks for session ID in markdown link reference format: [^s]: # (sessionid)
+        Or old XML format: <CYOA_SESSION_ID:sessionid>
         """
-        # Get first user message to identify the session
-        first_msg = messages[0].get('content', '') if messages else ''
-        session_hash = hashlib.sha256(first_msg.encode()).hexdigest()[:8]
+        import re
         
-        # Turn number is just message count
-        turn = len(messages)
+        # Extract session ID from any message - check all messages including assistant responses
+        for msg in messages:
+            content = msg.get('content', '')
+            
+            # Try new markdown link reference format first
+            match = re.search(r'\[\^s\]:\s*#\s*\(([a-f0-9]+)\)', str(content))
+            if match:
+                session_id = match.group(1)
+                key = f"session-{session_id}"
+                print(f"[CACHE] Key from markdown format = {key}")
+                return key
+            
+            # Try old XML format for backwards compatibility
+            match = re.search(r'<CYOA_SESSION_ID:([a-f0-9]+)>', str(content))
+            if match:
+                session_id = match.group(1)
+                key = f"session-{session_id}"
+                print(f"[CACHE] Key from XML format = {key}")
+                return key
         
-        key = f"{session_hash}-{turn}"
-        print(f"[CACHE] Key = {key} (session: {session_hash}, turn: {turn})")
-        return key
+        # Fallback: hash first message if no session ID found
+        # This should rarely happen now
+        import hashlib
+        first_msg = str(messages[0].get('content', '')) if messages else ''
+        fallback_key = hashlib.sha256(first_msg.encode()).hexdigest()[:16]
+        print(f"[CACHE] ⚠️  No session ID found, fallback key = {fallback_key}")
+        return fallback_key
     
     def set(self, key, value):
         """Store a value in the cache."""

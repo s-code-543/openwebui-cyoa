@@ -253,16 +253,31 @@ You can:
 
 The initial judge prompt is loaded as version 1 and set as active by default.
 
-### 4. Configure Open Web UI to Use CYOA Server
+### 4. Install Session ID Injector Function
 
 1. Open Open Web UI: https://localhost
-2. Go to **Admin Panel → Settings → Connections**
-3. Add a new **OpenAI API** connection:
+2. Go to **Admin Panel → Functions**
+3. Click **+ Add Function** (top right)
+4. Copy the contents of `openwebui_functions/input_functions/cyoa-session-id-injector.py`
+5. Paste into the function editor
+6. Name it **game-id**
+7. Click **Save**
+8. Go to **Workspace → Models**
+9. For each CYOA model (`cyoa-base`, `cyoa-moderated`, `gameserver-cyoa`):
+   - Click the model's settings icon
+   - Under **Functions**, enable **game-id** (toggle to Available)
+   - Under **Default Functions**, add **game-id**
+   - Click **Save**
+
+### 5. Configure Open Web UI to Use CYOA Server
+
+1. Go to **Admin Panel → Settings → Connections**
+2. Add a new **OpenAI API** connection:
    - **API Base URL:** `http://cyoa-game-server:8000/v1`
    - **API Key:** (leave blank)
    - **Enable:** ✓
 
-### 5. Workshopping the game master prompt
+### 6. Workshopping the game master prompt
 
 1. Open the admin interface in one tab: http://localhost:8001/admin/login/
 2. Start a new chat in Open Web UI

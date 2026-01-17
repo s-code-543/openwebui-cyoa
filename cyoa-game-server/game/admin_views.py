@@ -260,6 +260,11 @@ def config_editor(request, config_id=None):
     # Get available prompts
     adventure_prompts = Prompt.objects.exclude(prompt_type='judge').order_by('prompt_type', '-version')
     judge_prompts = Prompt.objects.filter(prompt_type='judge').order_by('-version')
+    game_ending_prompts = Prompt.objects.filter(prompt_type='game-ending').order_by('-version')
+    
+    # Get difficulty profiles
+    from .models import DifficultyProfile
+    difficulties = DifficultyProfile.objects.all()
     
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -289,6 +294,8 @@ def config_editor(request, config_id=None):
             judge_prompt_id = request.POST.get('judge_prompt')
             judge_model = request.POST.get('judge_model')
             judge_timeout = request.POST.get('judge_timeout', '30')
+            game_ending_prompt_id = request.POST.get('game_ending_prompt') or None
+            difficulty_id = request.POST.get('difficulty') or None
             total_turns = request.POST.get('total_turns', '10')
             phase1_turns = request.POST.get('phase1_turns', '3')
             phase2_turns = request.POST.get('phase2_turns', '3')
@@ -301,6 +308,8 @@ def config_editor(request, config_id=None):
                 try:
                     adventure_prompt = Prompt.objects.get(pk=adventure_prompt_id)
                     judge_prompt = Prompt.objects.get(pk=judge_prompt_id)
+                    game_ending_prompt = Prompt.objects.get(pk=game_ending_prompt_id) if game_ending_prompt_id else None
+                    difficulty = DifficultyProfile.objects.get(pk=difficulty_id) if difficulty_id else None
                     storyteller_timeout_int = int(storyteller_timeout)
                     judge_timeout_int = int(judge_timeout)
                     total_turns_int = int(total_turns)
@@ -319,6 +328,8 @@ def config_editor(request, config_id=None):
                         config.judge_prompt = judge_prompt
                         config.judge_model = judge_model
                         config.judge_timeout = judge_timeout_int
+                        config.game_ending_prompt = game_ending_prompt
+                        config.difficulty = difficulty
                         config.total_turns = total_turns_int
                         config.phase1_turns = phase1_turns_int
                         config.phase2_turns = phase2_turns_int
@@ -337,6 +348,8 @@ def config_editor(request, config_id=None):
                             judge_prompt=judge_prompt,
                             judge_model=judge_model,
                             judge_timeout=judge_timeout_int,
+                            game_ending_prompt=game_ending_prompt,
+                            difficulty=difficulty,
                             total_turns=total_turns_int,
                             phase1_turns=phase1_turns_int,
                             phase2_turns=phase2_turns_int,
@@ -358,6 +371,8 @@ def config_editor(request, config_id=None):
         'external_models': external_models,
         'adventure_prompts': adventure_prompts,
         'judge_prompts': judge_prompts,
+        'game_ending_prompts': game_ending_prompts,
+        'difficulties': difficulties,
     }
     return render(request, 'cyoa_admin/config_editor.html', context)
 
@@ -618,3 +633,69 @@ def import_models(request):
         return JsonResponse({'success': False, 'message': 'Provider not found'})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)})
+
+
+@debug_login_bypass
+def difficulty_list(request):
+    """
+    List all difficulty profiles.
+    """
+    from .models import DifficultyProfile
+    difficulties = DifficultyProfile.objects.all()
+    
+    context = {
+        'difficulties': difficulties,
+    }
+    return render(request, 'cyoa_admin/difficulty_list.html', context)
+
+
+@debug_login_bypass
+def difficulty_editor(request, difficulty_id=None):
+    """
+    Create or edit a difficulty profile.
+    """
+    from .models import DifficultyProfile
+    import json
+    
+    difficulty = None
+    if difficulty_id:
+        difficulty = get_object_or_404(DifficultyProfile, pk=difficulty_id)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        mode = request.POST.get('mode', 'curve')
+        
+        # Determine function source
+        if mode == 'curve':
+            function = request.POST.get('generated_function')
+            curve_points_json = request.POST.get('curve_points_json')
+            curve_points = json.loads(curve_points_json) if curve_points_json else None
+        else:
+            function = request.POST.get('function')
+            curve_points = None
+        
+        # Create or update
+        if difficulty:
+            difficulty.name = name
+            difficulty.description = description
+            difficulty.function = function
+            difficulty.curve_points = curve_points
+            difficulty.save()
+            messages.success(request, f'Difficulty profile "{name}" updated successfully.')
+        else:
+            difficulty = DifficultyProfile.objects.create(
+                name=name,
+                description=description,
+                function=function,
+                curve_points=curve_points
+            )
+            messages.success(request, f'Difficulty profile "{name}" created successfully.')
+        
+        return redirect('admin:difficulty_list')
+    
+    context = {
+        'difficulty': difficulty,
+    }
+    return render(request, 'cyoa_admin/difficulty_editor.html', context)
+

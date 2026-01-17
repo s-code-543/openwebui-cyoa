@@ -26,14 +26,7 @@ def list_models(request):
             "object": "model",
             "created": int(time.time()),
             "owned_by": "cyoa-game-server",
-            "description": "Base storyteller only (stores to cache for comparison)"
-        },
-        {
-            "id": "gameserver-cyoa-moderated",
-            "object": "model",
-            "created": int(time.time()),
-            "owned_by": "cyoa-game-server",
-            "description": "Judge only - retrieves from cache and moderates (for comparison)"
+            "description": "Base storyteller only (for testing prompts)"
         },
         {
             "id": "gameserver-cyoa-test",

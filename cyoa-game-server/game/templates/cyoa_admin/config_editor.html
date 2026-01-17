@@ -44,7 +44,7 @@
             
             <div class="mb-4">
                 <label for="total_turns" class="block text-sm font-medium text-gray-700 mb-2">Game Length *</label>
-                <select name="total_turns" id="total_turns" required onchange="updatePacingDefaults()"
+                <select name="total_turns" id="total_turns" required
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="5" {% if config and config.total_turns == 5 %}selected{% endif %}>5 turns (Quick test)</option>
                     <option value="10" {% if config and config.total_turns == 10 %}selected{% elif not config %}selected{% endif %}>10 turns (Standard)</option>
@@ -96,7 +96,7 @@
             <div>
                 <label for="storyteller_model" class="block text-sm font-medium text-gray-700 mb-2">
                     Storyteller Model *
-                    <button type="button" onclick="refreshModels()" class="ml-2 text-blue-600 hover:text-blue-800 text-xs">
+                    <button type="button" class="refresh-models-btn ml-2 text-blue-600 hover:text-blue-800 text-xs">
                         ↻ Refresh
                     </button>
                 </label>
@@ -155,7 +155,7 @@
             <div>
                 <label for="judge_model" class="block text-sm font-medium text-gray-700 mb-2">
                     Judge Model *
-                    <button type="button" onclick="refreshModels()" class="ml-2 text-blue-600 hover:text-blue-800 text-xs">
+                    <button type="button" class="refresh-models-btn ml-2 text-blue-600 hover:text-blue-800 text-xs">
                         ↻ Refresh
                     </button>
                 </label>
@@ -191,6 +191,45 @@
                        value="{% if config %}{{ config.judge_timeout }}{% else %}30{% endif %}"
                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <p class="mt-1 text-sm text-gray-500">How long to wait for judge validation (1-300 seconds)</p>
+            </div>
+            
+            <div class="mt-4">
+                <label for="difficulty" class="block text-sm font-medium text-gray-700 mb-2">
+                    Difficulty Profile
+                </label>
+                <select name="difficulty" id="difficulty"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">None (no difficulty modifiers)</option>
+                    {% for diff in difficulties %}
+                    <option value="{{ diff.id }}"
+                            {% if config and config.difficulty_id == diff.id %}selected{% endif %}>
+                        {{ diff.name }}{% if diff.description %} - {{ diff.description|truncatewords:8 }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-sm text-gray-500">
+                    Optional: Apply a difficulty curve that increases death probability over time.
+                    <a href="{% url 'admin:difficulty_list' %}" class="text-indigo-600 hover:text-indigo-800" target="_blank">Manage difficulty profiles</a>
+                </p>
+            </div>
+            
+            <div class="mt-4">
+                <label for="game_ending_prompt" class="block text-sm font-medium text-gray-700 mb-2">
+                    Game Ending Prompt
+                </label>
+                <select name="game_ending_prompt" id="game_ending_prompt"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Use active game-ending prompt (default)</option>
+                    {% for prompt in game_ending_prompts %}
+                    <option value="{{ prompt.id }}"
+                            {% if config and config.game_ending_prompt_id == prompt.id %}selected{% endif %}>
+                        Game Ending v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-sm text-gray-500">
+                    Prompt used when difficulty system triggers death/failure. Leave blank to use the active game-ending prompt.
+                </p>
             </div>
         </div>
         
@@ -241,6 +280,17 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById(id).addEventListener('input', updatePacingTotal);
     });
     updatePacingTotal();
+    
+    // Add event listener for total_turns change
+    const totalTurnsSelect = document.getElementById('total_turns');
+    if (totalTurnsSelect) {
+        totalTurnsSelect.addEventListener('change', updatePacingDefaults);
+    }
+    
+    // Add event listeners for refresh buttons
+    document.querySelectorAll('.refresh-models-btn').forEach(btn => {
+        btn.addEventListener('click', refreshModels);
+    });
 });
 
 async function refreshModels() {
@@ -259,7 +309,10 @@ async function refreshModels() {
         });
         
         if (!response.ok) throw new Error('Failed to refresh models');
-         (only Ollama models)
+        
+        const data = await response.json();
+        
+        // Update storyteller dropdown (only Ollama models)
         const storytellerOllama = storytellerSelect.querySelector('optgroup[label="Local Models (Ollama)"]');
         if (storytellerOllama) {
             storytellerOllama.innerHTML = '';
@@ -283,10 +336,7 @@ async function refreshModels() {
                 if (model === currentJudge) option.selected = true;
                 judgeOllama.appendChild(option);
             });
-        } option.textContent = model;
-            if (model === currentJudge) option.selected = true;
-            judgeOllama.appendChild(option);
-        });
+        }
         
         alert('Models refreshed successfully!');
     } catch (error) {

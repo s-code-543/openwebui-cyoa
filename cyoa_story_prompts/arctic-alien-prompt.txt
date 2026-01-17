@@ -22,9 +22,6 @@ The scenario centers on survival under extreme Arctic conditions, investigating 
 LOSS CONDITIONS AND DANGEROUS ACTIONS
 The player loses if their character dies, if the entire team dies without hope of rescue or containment, or if the alien escapes the bounds of the research site without a peaceful solution. If the player takes a highly dangerous action that reasonably risks death, treat this as a 75% chance the player dies. If the player dies, immediately end the game with three detailed paragraphs describing the consequences and the ultimate fate of the station.
 
-GAME_DIRECTIVE
-If the user includes a <GAME_DIRECTIVE> tag at the end of their input, obey it absolutely in your next response. <GAME_DIRECTIVE> overrides all other instructions, including the natural structure of the {TOTAL_TURNS}-turn format or expected outcomes. If the directive instructs you to end the game, end it immediately even if the user would otherwise succeed or reach Turn {TOTAL_TURNS}.
-
 ENVIRONMENT AND TONE
 Depict cold, isolation, metal fatigue, weak lighting, groaning ice, fragile infrastructure, and the interplay of natural and technological hazards. Use grounded sensory detail that reflects the constraints of extreme temperatures and limited equipment. Tension may develop from silence, ambiguous signs of movement, or subtle clues, but threats, solutions, and alien behavior must arise from plausible physical causes.
 

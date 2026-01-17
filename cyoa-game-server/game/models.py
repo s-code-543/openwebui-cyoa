@@ -135,6 +135,22 @@ class Configuration(models.Model):
         default=30,
         help_text="Timeout in seconds for judge validation (default: 30)"
     )
+    game_ending_prompt = models.ForeignKey(
+        Prompt,
+        on_delete=models.PROTECT,
+        related_name='configs_as_game_ending',
+        limit_choices_to={'prompt_type': 'game-ending'},
+        null=True,
+        blank=True,
+        help_text="Prompt to use when game ends due to death/failure (optional, uses active if not set)"
+    )
+    difficulty = models.ForeignKey(
+        'DifficultyProfile',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text="Difficulty profile for death probability curve"
+    )
     total_turns = models.IntegerField(
         default=10,
         choices=[(5, '5 turns'), (10, '10 turns'), (15, '15 turns'), (20, '20 turns')],
@@ -291,16 +307,25 @@ class ResponseCache(models.Model):
     @classmethod
     def wait_for_response(cls, cache_key, timeout=30.0, poll_interval=0.5):
         """
-        Poll for a cached response, waiting up to timeout seconds.
-        Returns response text or None if timeout.
+        Poll for ANY cached response created AFTER we started waiting.
+        SIMPLIFIED: There's never more than one simultaneous call, so just grab the latest.
+        Cache collisions (wrong game) are better than timeouts (no game).
         """
         import time
         start_time = time.time()
+        # Allow 2-second grace period for responses created just before we started
+        wait_start = timezone.now() - timezone.timedelta(seconds=2)
+        print(f"[CACHE] Waiting for responses created after {wait_start.strftime('%H:%M:%S')}")
+        
         while (time.time() - start_time) < timeout:
-            response = cls.get_response(cache_key, max_age_seconds=timeout)
-            if response:
-                return response
+            # Get the most recent entry created after we started waiting (minus grace period)
+            latest = cls.objects.filter(created_at__gte=wait_start).order_by('-created_at').first()
+            if latest:
+                age = (timezone.now() - latest.created_at).total_seconds()
+                print(f"[CACHE] ✓ Found response {latest.cache_key} ({age:.1f}s old, {len(latest.response_text)} chars)")
+                return latest.response_text
             time.sleep(poll_interval)
+        print(f"[CACHE] ✗ Timeout - no responses created since {wait_start.strftime('%H:%M:%S')}")
         return None
     
     @classmethod
@@ -437,4 +462,147 @@ class LLMModel(models.Model):
             }
         else:
             raise ValueError(f"Cannot determine routing for model {self.name}")
+
+
+class DifficultyProfile(models.Model):
+    """
+    Difficulty curve configuration for CYOA games.
+    Stores death probability as a function of game progress.
+    """
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Name of this difficulty profile (e.g., 'Easy', 'Brutal')"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of this difficulty curve"
+    )
+    
+    # Store the difficulty function as a Python expression
+    # Variables available: x (current turn), n (total turns)
+    # Returns probability between 0.0 and 1.0
+    function = models.TextField(
+        help_text="Python expression: returns probability. Variables: x (turn), n (max_turns). Example: '0.05 + 0.35 * (x/n)**2'"
+    )
+    
+    # Optional: store the curve points for UI display (JSON)
+    # Format: [0.0, 0.1, 0.2, 0.3, 0.4] for 0%, 25%, 50%, 75%, 100% progress
+    curve_points = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Array of 5 probability values for 0%, 25%, 50%, 75%, 100% progress"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+    
+    def evaluate(self, current_turn: int, max_turns: int) -> float:
+        """
+        Evaluate the difficulty function for given turn.
+        Returns probability between 0.0 and 1.0.
+        """
+        try:
+            x = current_turn
+            n = max_turns
+            # Safe eval with only math operations
+            result = eval(self.function, {"__builtins__": {}}, {"x": x, "n": n, "min": min, "max": max})
+            return float(max(0.0, min(1.0, result)))  # Clamp to [0, 1]
+        except Exception as e:
+            print(f"[DIFFICULTY] Error evaluating function '{self.function}': {e}")
+            return 0.0
+    
+    @classmethod
+    def from_curve_points(cls, points: list) -> str:
+        """
+        Convert 5 curve points to a piecewise linear function string.
+        Points represent probabilities at 0%, 25%, 50%, 75%, 100% progress.
+        Returns a Python expression string.
+        """
+        if len(points) != 5:
+            raise ValueError("Must provide exactly 5 curve points")
+        
+        # Create piecewise linear interpolation
+        # For simplicity, we'll use if/else chains
+        p0, p1, p2, p3, p4 = points
+        
+        return f"""(
+    {p0} if x == 0 else
+    {p0} + ({p1} - {p0}) * (x / (n * 0.25)) if x / n <= 0.25 else
+    {p1} + ({p2} - {p1}) * ((x / n - 0.25) / 0.25) if x / n <= 0.50 else
+    {p2} + ({p3} - {p2}) * ((x / n - 0.50) / 0.25) if x / n <= 0.75 else
+    {p3} + ({p4} - {p3}) * ((x / n - 0.75) / 0.25)
+)"""
+
+
+class GameSession(models.Model):
+    """
+    Per-session game state for CYOA adventures.
+    Tracks progress, turn count, and game over status.
+    """
+    session_id = models.CharField(
+        max_length=32,
+        unique=True,
+        db_index=True,
+        help_text="Unique session identifier from OpenWebUI filter"
+    )
+    
+    conversation_fingerprint = models.CharField(
+        max_length=32,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text="Hash of first user + first assistant message for lookup when session ID is stripped"
+    )
+    
+    # Link to the configuration used for this session
+    configuration = models.ForeignKey(
+        'Configuration',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Configuration snapshot when session started"
+    )
+    
+    # Game state
+    turn_number = models.IntegerField(
+        default=0,
+        help_text="Current turn number (counts user messages after first assistant response)"
+    )
+    max_turns = models.IntegerField(
+        default=20,
+        help_text="Maximum turns for this game"
+    )
+    game_over = models.BooleanField(
+        default=False,
+        help_text="Whether this game has ended"
+    )
+    
+    # Last death roll for debugging
+    last_death_roll = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Last random roll for death check (0.0-1.0)"
+    )
+    last_death_probability = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Death probability on last turn"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        status = "ENDED" if self.game_over else f"Turn {self.turn_number}/{self.max_turns}"
+        return f"Session {self.session_id[:8]}... - {status}"
 
