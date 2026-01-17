@@ -56,7 +56,7 @@ services:
       OLLAMA_URL: "http://host.docker.internal:11434"
     volumes:
       - ./cyoa-game-server:/app
-      - ./cyoa_story_prompts:/story_prompts  # Story prompt files
+      - ./cyoa_prompts:/story_prompts  # Story prompt files
       - cyoa-db:/app/db  # Persist SQLite database
     networks:
       - cyoa-network

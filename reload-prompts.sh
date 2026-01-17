@@ -24,7 +24,7 @@ echo ""
 
 # Reload adventure prompts
 echo "2️⃣  Reloading adventure prompts from disk..."
-docker exec -it "$CONTAINER" python manage.py reload_story_prompts
+docker exec -it "$CONTAINER" python manage.py load_prompts
 echo ""
 
 echo "✅ Done! Your adventure prompts now support configurable turn pacing."

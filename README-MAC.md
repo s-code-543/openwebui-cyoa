@@ -11,15 +11,9 @@ This guide documents the macOS (Apple Silicon) setup for components that have be
 - **Xcode** from the App Store - Required for Core ML model generation
   - After installing, open Xcode and accept the license agreement
   - Or run: `sudo xcodebuild -license accept`
-- **Colima** for Docker (lighter than Docker Desktop)
-  ```bash
-  brew install colima docker docker-compose
-  colima start
-  
-  # Add Colima socket to shell profile (permanent)
-  echo 'export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"' >> ~/.zshrc
-  source ~/.zshrc
-  ```
+- **Docker Desktop** for Mac
+  - Install via [Docker Website](https://www.docker.com/products/docker-desktop/) or `brew install --cask docker`
+  - Ensure it is running before starting the stack
 
 ---
 
@@ -161,14 +155,12 @@ EOF
 
 ### 3. Start the Containers
 
-Make sure Colima is running, then start the stack:
+Ensure Docker Desktop is running, then start the stack:
 
 ```bash
-# Ensure Colima is running
-colima status || colima start
+cd /Users/$(whoami)/openwebui-cyoa
 
 # Start the containers (detached mode)
-cd /Users/$(whoami)/openwebui-cyoa
 docker compose -f docker-compose.mac.yml up -d
 
 # Or to watch logs (foreground)
@@ -177,8 +169,7 @@ docker compose -f docker-compose.mac.yml up
 
 ### 4. Access Open Web UI
 
-- **HTTPS (recommended):** https://mac.stargate.lan or https://localhost
-- **HTTP (fallback):** http://localhost:3000
+- **URL:** https://openwebui.mac.stargate.lan (or your configured local hostname)
 
 Accept the self-signed certificate warning in your browser.
 
@@ -201,89 +192,59 @@ This toggle dance is required due to a UI quirk - it ensures the setting is prop
 
 ## CYOA Game Server Setup
 
-The CYOA Game Server provides a dual-LLM architecture for Choose Your Own Adventure games. It acts as an OpenAI-compatible proxy that:
-1. Routes requests to your storyteller LLM (any Ollama model or Claude)
-2. Passes the output through a judge LLM to ensure fair game design
-3. Logs all corrections for prompt tuning
+The CYOA Game Server is a standalone backend application that manages the game state, story generation, and difficulty system. It is **no longer** just an Open Web UI proxy.
 
 ### Architecture
 
-- **Storyteller LLM:** Generates the story turns (configurable: Ollama or Claude)
-- **Judge LLM:** Validates story turns don't break game design rules
-- **Admin Interface:** Edit judge prompts and view correction statistics
+- **Server:** Django (Python) application managing game logic and prompting.
+- **Database:** SQLite for storing game turns, prompts, and judging statistics.
+- **Speech-to-Text:** Configured to use the local Whisper.cpp service via speaches/openai-compatible API.
 
-### 1. Start the CYOA Game Server
+### 1. Start the Server
 
-The server is already configured in `docker-compose.mac.yml`:
+The server starts automatically with the docker stack, but you can manage it independently:
 
 ```bash
 cd /Users/$(whoami)/openwebui-cyoa
 
-# Build and start the game server
-docker compose -f docker-compose.mac.yml up -d cyoa-game-server
+# Build/Rebuild and start
+docker compose -f docker-compose.mac.yml up -d --build cyoa-game-server
 
-# Watch the logs
+# Watch logs (essential for monitoring the game state)
 docker compose -f docker-compose.mac.yml logs -f cyoa-game-server
 ```
 
-### 2. Initialize the Database
+### 2. Load Prompts (First Run & Updates)
 
-Run migrations and load prompts:
+The system uses text files in `cyoa_prompts/` as the source of truth for Adventure, Judge, and Game Ending prompts.
+
+To load or reload all prompts into the database:
 
 ```bash
-# Run database migrations
-docker compose -f docker-compose.mac.yml exec cyoa-game-server python manage.py migrate
+# Using the convenience script
+./reload-prompts.sh
 
-# Load the judge prompt and adventure stories
-docker compose -f docker-compose.mac.yml exec cyoa-game-server python manage.py load_initial_prompts
-docker compose -f docker-compose.mac.yml exec cyoa-game-server python manage.py load_story_prompts
-
-# Create an admin user (you'll be prompted for password)
-docker compose -f docker-compose.mac.yml exec cyoa-game-server python manage.py createsuperuser --username admin --email admin@example.com
+# Or manually via Docker
+docker exec -it cyoa-game-server python manage.py load_prompts
 ```
+
+**Creating New Prompts:**
+1. Create a new `.txt` file in `cyoa_prompts/` (e.g., `space-opera.txt`).
+2. Run the reload command above.
+3. It will automatically be imported as a new Adventure type.
+4. Alternatively, you can create prompts directly in the Admin Database interface.
 
 ### 3. Access the Admin Interface
 
-Open http://localhost:8001/admin/login/ and log in with your admin credentials.
+- **URL:** https://cyoa.mac.stargate.lan/admin/
 
-You can:
-- **Dashboard:** View correction statistics
-- **Audit Log:** See all requests and which ones were modified by the judge
-- **Prompts:** Edit judge prompt versions and set which one is active
+No account creation is required; you will be directed to the dashboard.
 
-The initial judge prompt is loaded as version 1 and set as active by default.
+### 4. Workshopping the Game Master Prompt
 
-### 4. Install Session ID Injector Function
+1. **Admin Tab:** Open the Admin interface in one browser tab. Navigate to the Prompts section to edit the active Judge or Adventure prompts.
+2. **Game Tab:** Play the game in another tab.
+3. **Logs:** Keep a terminal window open with `docker logs -f cyoa-game-server` to see the "thought process" of the LLM and the Judge's decisions in real-time.
 
-1. Open Open Web UI: https://localhost
-2. Go to **Admin Panel → Functions**
-3. Click **+ Add Function** (top right)
-4. Copy the contents of `openwebui_functions/input_functions/cyoa-session-id-injector.py`
-5. Paste into the function editor
-6. Name it **game-id**
-7. Click **Save**
-8. Go to **Workspace → Models**
-9. For each CYOA model (`cyoa-base`, `cyoa-moderated`, `gameserver-cyoa`):
-   - Click the model's settings icon
-   - Under **Functions**, enable **game-id** (toggle to Available)
-   - Under **Default Functions**, add **game-id**
-   - Click **Save**
-
-### 5. Configure Open Web UI to Use CYOA Server
-
-1. Go to **Admin Panel → Settings → Connections**
-2. Add a new **OpenAI API** connection:
-   - **API Base URL:** `http://cyoa-game-server:8000/v1`
-   - **API Key:** (leave blank)
-   - **Enable:** ✓
-
-### 6. Workshopping the game master prompt
-
-1. Open the admin interface in one tab: http://localhost:8001/admin/login/
-2. Start a new chat in Open Web UI
-3. Add **both** `gameserver-cyoa-base` and `gameserver-cyoa-moderated` models to the same chat for side-by-side comparison
-4. Provide your game scenario and watch the unmoderated output vs the judge-corrected output
-5. Tune the judge prompt in the admin interface based on what you see
-
----
+Adjust the prompt text in the Admin interface, save, and the very next turn in the Game tab will use the updated logic.
 

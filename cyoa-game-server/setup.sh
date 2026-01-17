@@ -24,8 +24,8 @@ echo "👤 Creating superuser..."
 echo "You'll be prompted to create an admin account:"
 python manage.py createsuperuser
 
-echo "📝 Loading initial judge prompt..."
-python manage.py load_initial_prompts
+echo "📝 Loading prompts..."
+python manage.py load_prompts
 
 echo ""
 echo "✅ Setup complete!"
