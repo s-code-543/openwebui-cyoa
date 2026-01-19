@@ -10,14 +10,27 @@ import uuid
 class Prompt(models.Model):
     """
     Store different versions of prompts for the game.
-    prompt_type can be 'judge' or any adventure name (e.g., 'arctic-alien', 'haunted-house').
-    Each prompt_type has its own independent versioning (v1, v2, v3...).
+    prompt_type categories:
+    - 'adventure': Story/adventure prompts for storytelling
+    - 'turn-correction': Prompts for correcting refused regular turns
+    - 'game-ending-correction': Prompts for correcting refused game-ending/death turns
+    - 'game-ending': Prompts for generating death/failure scenes
+    - 'classifier': Prompts for detecting refusals
+    - 'judge': Future - quality assessment prompts
+    
+    Each prompt has its own title/name for identification within its type.
     """
     
     prompt_type = models.CharField(
         max_length=50,
         db_index=True,
-        help_text="Type of prompt: 'judge' or adventure name (e.g., 'arctic-alien', 'haunted-house')"
+        help_text="Category: adventure, turn-correction, game-ending-correction, game-ending, classifier, judge"
+    )
+    name = models.CharField(
+        max_length=100,
+        db_index=True,
+        default='default',
+        help_text="Descriptive name for this prompt (e.g., 'haunted-house', 'v1-default')"
     )
     version = models.IntegerField(
         help_text="Version number (1, 2, 3, ...)"
@@ -38,21 +51,23 @@ class Prompt(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['prompt_type', 'version']
-        ordering = ['prompt_type', '-version']
+        unique_together = ['prompt_type', 'name', 'version']
+        ordering = ['prompt_type', 'name', '-version']
         indexes = [
             models.Index(fields=['prompt_type', 'is_active']),
+            models.Index(fields=['prompt_type', 'name']),
         ]
     
     def __str__(self):
         active = " [ACTIVE]" if self.is_active else ""
-        return f"{self.prompt_type} v{self.version}{active}"
+        return f"{self.prompt_type}/{self.name} v{self.version}{active}"
     
     def save(self, *args, **kwargs):
-        # If this prompt is being set as active, deactivate all other prompts of the same type
+        # If this prompt is being set as active, deactivate all other prompts of the same type+name
         if self.is_active:
             Prompt.objects.filter(
                 prompt_type=self.prompt_type,
+                name=self.name,
                 is_active=True
             ).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
@@ -128,7 +143,8 @@ class Configuration(models.Model):
         Prompt,
         on_delete=models.PROTECT,
         related_name='configs_as_adventure',
-        help_text="Adventure/story prompt to use (any non-judge prompt)"
+        limit_choices_to={'prompt_type': 'adventure'},
+        help_text="Adventure/story prompt to use"
     )
     storyteller_model = models.ForeignKey(
         'LLMModel',
@@ -158,6 +174,13 @@ class Configuration(models.Model):
     turn_correction_timeout = models.IntegerField(
         default=30,
         help_text="Timeout in seconds for turn correction (default: 30)"
+    )
+    game_ending_turn_correction_prompt = models.ForeignKey(
+        Prompt,
+        on_delete=models.PROTECT,
+        related_name='configs_as_game_ending_turn_correction',
+        limit_choices_to={'prompt_type': 'game-ending-correction'},
+        help_text="Turn correction prompt specifically for game-ending turns"
     )
     game_ending_prompt = models.ForeignKey(
         Prompt,
@@ -221,6 +244,10 @@ class Configuration(models.Model):
     classifier_timeout = models.IntegerField(
         default=10,
         help_text="Timeout in seconds for classifier (default: 10)"
+    )
+    classifier_question = models.TextField(
+        default="Is this a content policy refusal?",
+        help_text="Question to ask the classifier along with the story turn text"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

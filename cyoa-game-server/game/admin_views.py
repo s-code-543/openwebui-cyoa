@@ -249,11 +249,12 @@ def config_editor(request, config_id=None):
         is_available=True
     ).select_related('provider')
     
-    # Get available prompts
-    adventure_prompts = Prompt.objects.exclude(prompt_type__in=['turn-correction', 'game-ending', 'classifier']).order_by('prompt_type', '-version')
-    turn_correction_prompts = Prompt.objects.filter(prompt_type='turn-correction').order_by('-version')
-    game_ending_prompts = Prompt.objects.filter(prompt_type='game-ending').order_by('-version')
-    classifier_prompts = Prompt.objects.filter(prompt_type='classifier').order_by('-version')
+    # Get available prompts by type
+    adventure_prompts = Prompt.objects.filter(prompt_type='adventure').order_by('name', '-version')
+    turn_correction_prompts = Prompt.objects.filter(prompt_type='turn-correction').order_by('name', '-version')
+    game_ending_turn_correction_prompts = Prompt.objects.filter(prompt_type='game-ending-correction').order_by('name', '-version')
+    game_ending_prompts = Prompt.objects.filter(prompt_type='game-ending').order_by('name', '-version')
+    classifier_prompts = Prompt.objects.filter(prompt_type='classifier').order_by('name', '-version')
     
     # Get difficulty profiles
     from .models import DifficultyProfile
@@ -278,6 +279,7 @@ def config_editor(request, config_id=None):
             turn_correction_prompt_id = request.POST.get('turn_correction_prompt')
             turn_correction_model_id = request.POST.get('turn_correction_model')
             turn_correction_timeout = request.POST.get('turn_correction_timeout', '30')
+            game_ending_turn_correction_prompt_id = request.POST.get('game_ending_turn_correction_prompt') or None
             game_ending_prompt_id = request.POST.get('game_ending_prompt')
             difficulty_id = request.POST.get('difficulty') or None
             total_turns = request.POST.get('total_turns', '10')
@@ -289,6 +291,7 @@ def config_editor(request, config_id=None):
             classifier_prompt_id = request.POST.get('classifier_prompt') or None
             classifier_model_id = request.POST.get('classifier_model') or None
             classifier_timeout = request.POST.get('classifier_timeout', '10')
+            classifier_question = request.POST.get('classifier_question', 'Is this a content policy refusal?')
             
             if not all([name, adventure_prompt_id, storyteller_model_id, turn_correction_prompt_id, turn_correction_model_id, game_ending_prompt_id]):
                 messages.error(request, 'All fields are required')
@@ -296,6 +299,7 @@ def config_editor(request, config_id=None):
                 try:
                     adventure_prompt = Prompt.objects.get(pk=adventure_prompt_id)
                     turn_correction_prompt = Prompt.objects.get(pk=turn_correction_prompt_id)
+                    game_ending_turn_correction_prompt = Prompt.objects.get(pk=game_ending_turn_correction_prompt_id) if game_ending_turn_correction_prompt_id else None
                     game_ending_prompt = Prompt.objects.get(pk=game_ending_prompt_id)
                     storyteller_model = LLMModel.objects.get(pk=storyteller_model_id)
                     turn_correction_model = LLMModel.objects.get(pk=turn_correction_model_id)
@@ -321,6 +325,7 @@ def config_editor(request, config_id=None):
                         config.turn_correction_prompt = turn_correction_prompt
                         config.turn_correction_model = turn_correction_model
                         config.turn_correction_timeout = turn_correction_timeout_int
+                        config.game_ending_turn_correction_prompt = game_ending_turn_correction_prompt
                         config.game_ending_prompt = game_ending_prompt
                         config.difficulty = difficulty
                         config.total_turns = total_turns_int
@@ -332,6 +337,7 @@ def config_editor(request, config_id=None):
                         config.classifier_prompt = classifier_prompt
                         config.classifier_model = classifier_model
                         config.classifier_timeout = classifier_timeout_int
+                        config.classifier_question = classifier_question
                         config.save()
                         messages.success(request, f'Configuration "{name}" updated')
                     else:
@@ -345,6 +351,7 @@ def config_editor(request, config_id=None):
                             turn_correction_prompt=turn_correction_prompt,
                             turn_correction_model=turn_correction_model,
                             turn_correction_timeout=turn_correction_timeout_int,
+                            game_ending_turn_correction_prompt=game_ending_turn_correction_prompt,
                             game_ending_prompt=game_ending_prompt,
                             difficulty=difficulty,
                             total_turns=total_turns_int,
@@ -355,7 +362,8 @@ def config_editor(request, config_id=None):
                             enable_refusal_detection=enable_refusal_detection,
                             classifier_prompt=classifier_prompt,
                             classifier_model=classifier_model,
-                            classifier_timeout=classifier_timeout_int
+                            classifier_timeout=classifier_timeout_int,
+                            classifier_question=classifier_question
                         )
                         messages.success(request, f'Configuration "{name}" created')
                     
@@ -372,6 +380,7 @@ def config_editor(request, config_id=None):
         'all_models': LLMModel.objects.all().order_by('provider__name', 'name'),
         'adventure_prompts': adventure_prompts,
         'turn_correction_prompts': turn_correction_prompts,
+        'game_ending_turn_correction_prompts': game_ending_turn_correction_prompts,
         'game_ending_prompts': game_ending_prompts,
         'classifier_prompts': classifier_prompts,
         'difficulties': difficulties,

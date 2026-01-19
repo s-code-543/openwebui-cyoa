@@ -8,7 +8,7 @@ from .external_anthropic_utils import call_anthropic as call_anthropic_api
 from .models import LLMModel
 
 
-def call_llm(messages, system_prompt=None, llm_model=None, timeout=30):
+def call_llm(messages, system_prompt=None, llm_model=None, timeout=30, disable_thinking=False):
     """
     Universal LLM caller - routes to appropriate backend using LLMModel instance.
     
@@ -17,6 +17,7 @@ def call_llm(messages, system_prompt=None, llm_model=None, timeout=30):
         system_prompt: Optional system prompt
         llm_model: LLMModel instance (required) containing routing information
         timeout: Timeout in seconds for LLM calls (default: 30)
+        disable_thinking: Disable chain-of-thought reasoning for Ollama models (default: False)
     
     Returns:
         String response from the LLM
@@ -43,7 +44,8 @@ def call_llm(messages, system_prompt=None, llm_model=None, timeout=30):
             system_prompt, 
             routing_info['model'],
             base_url=routing_info.get('base_url'),
-            timeout=timeout
+            timeout=timeout,
+            disable_thinking=disable_thinking
         )
     
     elif routing_info['type'] == 'anthropic':

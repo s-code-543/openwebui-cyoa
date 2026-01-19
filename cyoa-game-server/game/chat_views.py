@@ -250,25 +250,36 @@ def chat_api_send_message(request):
         refusal_info = {
             'was_refusal': False,
             'classifier_response': '',
-            'was_corrected': False
+            'was_corrected': False,
+            'original_text': '',
+            'turn_1_refusal': False,
+            'all_attempts_failed': False,
+            'attempts': []
         }
         
-        if not use_game_ending_prompt and config:
+        if config:
             refusal_result = process_potential_refusal(
                 messages=messages,
                 story_turn=llm_response,
                 config=config,
-                user_message=user_message
+                user_message=user_message,
+                is_game_ending=use_game_ending_prompt,
+                turn_number=turn_number,
+                max_retries=3
             )
             
             final_response = refusal_result['final_turn']
             refusal_info = {
                 'was_refusal': refusal_result['was_refusal'],
                 'classifier_response': refusal_result['classifier_response'],
-                'was_corrected': refusal_result['was_corrected']
+                'was_corrected': refusal_result['was_corrected'],
+                'original_text': llm_response if refusal_result['was_refusal'] else '',
+                'turn_1_refusal': refusal_result.get('turn_1_refusal', False),
+                'all_attempts_failed': refusal_result.get('all_attempts_failed', False),
+                'attempts': refusal_result.get('attempts', [])
             }
             
-            # Log to audit if refusal was detected
+            # Log to audit if refusal was detected (before early returns)
             if refusal_info['was_refusal']:
                 AuditLog.objects.create(
                     original_text=llm_response,
@@ -280,12 +291,69 @@ def chat_api_send_message(request):
                     correction_prompt_used=config.turn_correction_prompt if refusal_info['was_corrected'] else None
                 )
                 print(f"[CHAT] Refusal logged to audit (corrected={refusal_info['was_corrected']})")
-        
+            
+            # Handle turn 1 refusal - save error message and return
+            if refusal_info['turn_1_refusal']:
+                error_text = "The AI is a petulant child and refused to play your game. Sorry about that, try again but maybe tone it down like 10%"
+                assistant_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=error_text,
+                    metadata={
+                        'is_error': True,
+                        'refusal_info': refusal_info
+                    }
+                )
+                return JsonResponse({
+                    'message': {
+                        'role': assistant_msg.role,
+                        'content': assistant_msg.content,
+                        'created_at': assistant_msg.created_at.isoformat(),
+                        'refusal_info': refusal_info,
+                        'is_error': True
+                    },
+                    'state': {
+                        'inventory': [],
+                        'turn_current': 0,
+                        'turn_max': max_turns,
+                        'choice1': '',
+                        'choice2': ''
+                    },
+                    'game_blocked': True
+                })
+            
+            # Handle all attempts failed (turn 2+) - save error message and return
+            if refusal_info['all_attempts_failed']:
+                error_text = "The AI is a petulant child and refused to play your game. Sorry about that, try again but maybe tone it down like 10%"
+                assistant_msg = ChatMessage.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=error_text,
+                    metadata={
+                        'is_error': True,
+                        'refusal_info': refusal_info
+                    }
+                )
+                return JsonResponse({
+                    'message': {
+                        'role': assistant_msg.role,
+                        'content': assistant_msg.content,
+                        'created_at': assistant_msg.created_at.isoformat(),
+                        'refusal_info': refusal_info,
+                        'is_error': True
+                    },
+                    'state': extract_game_state(messages[-1]['content'] if messages else ''),
+                    'game_blocked': True
+                })
+            
         # Save assistant response (using final response after refusal processing)
         assistant_msg = ChatMessage.objects.create(
             conversation=conversation,
             role='assistant',
-            content=final_response
+            content=final_response,
+            metadata={
+                'refusal_info': refusal_info if refusal_info['was_refusal'] else None
+            }
         )
         
         # Extract game state from response
@@ -301,7 +369,8 @@ def chat_api_send_message(request):
             'message': {
                 'role': assistant_msg.role,
                 'content': assistant_msg.content,
-                'created_at': assistant_msg.created_at.isoformat()
+                'created_at': assistant_msg.created_at.isoformat(),
+                'refusal_info': refusal_info if refusal_info['was_refusal'] else None
             },
             'state': game_state
         })

@@ -130,7 +130,7 @@ def get_ollama_models(base_url=None, timeout=10):
         return []
 
 
-def call_ollama(messages, system_prompt=None, model=None, base_url=None, timeout=30):
+def call_ollama(messages, system_prompt=None, model=None, base_url=None, timeout=30, disable_thinking=False):
     """
     Call Ollama API with the given messages.
     
@@ -140,6 +140,7 @@ def call_ollama(messages, system_prompt=None, model=None, base_url=None, timeout
         model: Ollama model to use (required)
         base_url: Base URL of Ollama server (defaults to local)
         timeout: Read timeout in seconds (default: 30)
+        disable_thinking: Disable chain-of-thought reasoning (default: False)
     
     Returns:
         String response from the model
@@ -188,8 +189,14 @@ def call_ollama(messages, system_prompt=None, model=None, base_url=None, timeout
         }
     }
     
+    # Disable thinking for fast binary classification tasks
+    if disable_thinking:
+        payload["options"]["enable_thinking"] = False
+    
     try:
-        print(f"[OLLAMA] {base_url} | {model} | timeout={timeout}s")
+        import time
+        start_time = time.time()
+        print(f"[OLLAMA] {base_url} | {model} | timeout={timeout}s{' | thinking=disabled' if disable_thinking else ''}")
         
         response = requests.post(
             f"{base_url}/api/chat",
@@ -203,17 +210,24 @@ def call_ollama(messages, system_prompt=None, model=None, base_url=None, timeout
             raise Exception(error_msg)
         
         res = response.json()
+        elapsed = time.time() - start_time
+        print(f"[OLLAMA] ✓ Response received in {elapsed:.2f}s")
+        
         content = res.get("message", {}).get("content", "")
         thinking = res.get("message", {}).get("thinking", "")
         
-        # Qwen models sometimes only output to 'thinking' field instead of 'content'
-        if len(content) == 0 and len(thinking) > 0:
-            print(f"[OLLAMA] Warning: Model outputting to 'thinking' field only - check prompt design")
+        # Handle thinking-enabled models that output to thinking field
+        if not content and thinking:
+            print(f"[OLLAMA] ⚠️  Model used 'thinking' field ({len(thinking)} chars) but no content - check if thinking should be disabled")
+            # For classifier calls, this is an error - we need actual output
+            if disable_thinking:
+                print(f"[OLLAMA] ✗ Empty content despite disable_thinking=True")
+                raise Exception(f"Model returned empty content")
             return ""
         
-        if len(content) == 0:
-            print(f"[OLLAMA] Error: Empty response from {model}")
-            print(f"[OLLAMA] Full response: {res}")
+        if not content:
+            print(f"[OLLAMA] ✗ Empty response from {model}")
+            raise Exception(f"Model returned empty content")
         
         return content
     

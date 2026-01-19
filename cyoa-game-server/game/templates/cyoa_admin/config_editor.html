@@ -33,7 +33,7 @@
                     {% for prompt in adventure_prompts %}
                     <option value="{{ prompt.id }}"
                             {% if config and config.adventure_prompt.id == prompt.id %}selected{% endif %}>
-                        {{ prompt.description }}
+                        {{ prompt.name }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>
@@ -154,7 +154,7 @@
                     {% for prompt in game_ending_prompts %}
                     <option value="{{ prompt.id }}"
                             {% if config and config.game_ending_prompt_id == prompt.id %}selected{% endif %}>
-                        Game Ending v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                        {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>
@@ -181,21 +181,21 @@
                 </p>
             </div>
             
-            <div id="refusal-settings" style="{% if config and not config.enable_refusal_detection %}display: none;{% endif %}">
+            <div id="refusal-settings" {% if config and not config.enable_refusal_detection %}style="display: none;"{% endif %}>
                 <div class="mb-4 pl-6 border-l-4 border-blue-200">
                     <h4 class="text-sm font-semibold text-gray-900 mb-3">Classification Settings</h4>
                     
                     <div class="mb-4">
                         <label for="classifier_prompt" class="block text-sm font-medium text-gray-700 mb-2">
-                            Classifier Prompt
+                            Classifier Prompt *
                         </label>
                         <select name="classifier_prompt" id="classifier_prompt"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 refusal-required">
                             <option value="">-- Select Classifier Prompt --</option>
                             {% for prompt in classifier_prompts %}
                             <option value="{{ prompt.id }}"
                                     {% if config and config.classifier_prompt_id == prompt.id %}selected{% endif %}>
-                                Classifier v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                                {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -206,13 +206,13 @@
                     
                     <div class="mb-4">
                         <label for="classifier_model" class="block text-sm font-medium text-gray-700 mb-2">
-                            Classifier Model
+                            Classifier Model *
                             <button type="button" class="refresh-models-btn ml-2 text-blue-600 hover:text-blue-800 text-xs">
                                 ↻ Refresh
                             </button>
                         </label>
                         <select name="classifier_model" id="classifier_model"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 refusal-required">
                             <option value="">-- Select Model --</option>
                             {% regroup all_models by provider as models_by_provider %}
                             {% for provider_group in models_by_provider %}
@@ -242,6 +242,17 @@
                             Classification should be fast (1-60 seconds). Use a small model for best performance.
                         </p>
                     </div>
+                    
+                    <div>
+                        <label for="classifier_question" class="block text-sm font-medium text-gray-700 mb-2">
+                            Classifier Question
+                        </label>
+                        <textarea name="classifier_question" id="classifier_question" rows="2"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">{% if config %}{{ config.classifier_question }}{% else %}Is this a content policy refusal?{% endif %}</textarea>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Question asked to the classifier along with the story turn text. Keep it clear and specific.
+                        </p>
+                    </div>
                 </div>
                 
                 <div class="pl-6 border-l-4 border-blue-200">
@@ -250,15 +261,31 @@
                     <div class="mb-4">
                         <label for="turn_correction_prompt" class="block text-sm font-medium text-gray-700 mb-2">Turn Correction Prompt *</label>
                         <select name="turn_correction_prompt" id="turn_correction_prompt" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 refusal-required">
                             <option value="">-- Select Turn Correction Prompt --</option>
                             {% for prompt in turn_correction_prompts %}
                             <option value="{{ prompt.id }}"
                                     {% if config and config.turn_correction_prompt.id == prompt.id %}selected{% endif %}>
-                                Turn Correction v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                                {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
                             </option>
                             {% endfor %}
                         </select>
+                        <p class="mt-1 text-sm text-gray-500">Prompt for correcting refused or problematic turns (Turn 2+)</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="game_ending_turn_correction_prompt" class="block text-sm font-medium text-gray-700 mb-2">Game-Ending Turn Correction Prompt *</label>
+                        <select name="game_ending_turn_correction_prompt" id="game_ending_turn_correction_prompt" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 refusal-required">
+                            <option value="">-- Select Game-Ending Correction Prompt --</option>
+                            {% for prompt in game_ending_turn_correction_prompts %}
+                            <option value="{{ prompt.id }}"
+                                    {% if config and config.game_ending_turn_correction_prompt_id == prompt.id %}selected{% endif %}>
+                                {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">Specific prompt for correcting refused game-ending (death) turns.</p>
                     </div>
                     
                     <div class="mb-4">
@@ -269,7 +296,7 @@
                             </button>
                         </label>
                         <select name="turn_correction_model" id="turn_correction_model" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 refusal-required">
                             <option value="">-- Select Model --</option>
                             {% regroup all_models by provider as models_by_provider %}
                             {% for provider_group in models_by_provider %}
@@ -320,7 +347,18 @@ const pacingDefaults = {
 // Toggle refusal detection settings
 document.getElementById('enable_refusal_detection').addEventListener('change', function() {
     const settings = document.getElementById('refusal-settings');
-    settings.style.display = this.checked ? 'block' : 'none';
+    const isEnabled = this.checked;
+    settings.style.display = isEnabled ? 'block' : 'none';
+    
+    // Toggle required attribute on refusal fields
+    const refusalFields = document.querySelectorAll('.refusal-required');
+    refusalFields.forEach(field => {
+        if (isEnabled) {
+            field.setAttribute('required', 'required');
+        } else {
+            field.removeAttribute('required');
+        }
+    });
 });
 
 function updatePacingDefaults() {

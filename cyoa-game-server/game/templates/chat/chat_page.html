@@ -87,10 +87,23 @@
     <template x-for="(message, index) in messages" :key="index">
       <div>
         <div
-          :class="message.role === 'user' ? 'bg-indigo-600 text-white text-right' : 'bg-gray-100 text-gray-900'"
-          class="w-full px-2 py-1.5 rounded-lg"
+          :class="{
+            'bg-indigo-600 text-white text-right': message.role === 'user',
+            'bg-red-50 text-red-900 border border-red-200': message.role === 'assistant' && (message.is_error || (message.metadata && message.metadata.is_error)),
+            'bg-gray-100 text-gray-900': message.role === 'assistant' && !message.is_error && !(message.metadata && message.metadata.is_error)
+          }"
+          class="w-full px-2 py-1.5 rounded-lg relative"
         >
           <div class="whitespace-pre-wrap text-[14px] leading-snug" x-text="message.content"></div>
+          <!-- Refusal indicator for assistant messages -->
+          <button
+            x-show="message.role === 'assistant' && (message.refusal_info || (message.metadata && message.metadata.refusal_info))"
+            @click="viewRefusalDetails(message)"
+            class="absolute top-1 right-1 w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs hover:bg-blue-200 transition-colors shadow-sm"
+            title="View refusal details"
+          >
+            ⓘ
+          </button>
         </div>
       </div>
     </template>
@@ -215,7 +228,7 @@
       <div x-show="!gameStarted" class="flex items-center gap-2 mb-1.5">
         <button
           @click="startGame()"
-          :disabled="isLoading"
+          :disabled="isLoading || gameBlocked"
           class="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm whitespace-nowrap"
         >
           Start a new game
@@ -227,7 +240,7 @@
       <div x-show="gameStarted" class="grid grid-cols-2 gap-1.5 mb-1.5">
         <button
           @click="sendChoice(1)"
-          :disabled="isLoading || !choice1Text.trim()"
+          :disabled="isLoading || !choice1Text.trim() || gameBlocked"
           class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
           title="Choice 1"
           x-text="choice1Text || 'Waiting for choices…'"
@@ -236,7 +249,7 @@
 
         <button
           @click="sendChoice(2)"
-          :disabled="isLoading || !choice2Text.trim()"
+          :disabled="isLoading || !choice2Text.trim() || gameBlocked"
           class="w-full px-2 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-left text-xs truncate"
           title="Choice 2"
           x-text="choice2Text || 'Waiting for choices…'"
@@ -251,7 +264,7 @@
           @keydown.enter.prevent="sendMessage()"
           @input="autoResize($event.target); saveDraft()"
           x-ref="messageInput"
-          :disabled="isLoading"
+          :disabled="isLoading || gameBlocked"
           placeholder="Type your action…"
           rows="1"
           class="flex-1 px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent text-sm resize-none overflow-hidden"
@@ -260,7 +273,7 @@
 
         <button
           @click="sendMessage()"
-          :disabled="isLoading || !inputMessage.trim()"
+          :disabled="isLoading || !inputMessage.trim() || gameBlocked"
           class="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-sm"
         >
           Send
@@ -268,12 +281,132 @@
 
         <button
           @click="toggleRecording()"
-          :disabled="isLoading"
+          :disabled="isLoading || gameBlocked"
           :class="recorderState === 'idle' ? 'bg-gray-200 hover:bg-red-100 hover:text-red-600' : 'bg-red-500 text-white'"
           class="px-2 py-1.5 text-gray-700 rounded text-sm transition-colors"
           :title="recorderState === 'idle' ? 'Start recording' : 'Recording...'"
         >
           🎤
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Refusal Details Modal -->
+  <div
+    x-show="showRefusalModal"
+    @click.self="showRefusalModal = false"
+    x-cloak
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+  >
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+      <!-- Modal header -->
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-gray-900">Turn Correction Details</h3>
+        <button
+          @click="showRefusalModal = false"
+          class="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+        >
+          ×
+        </button>
+      </div>
+      
+      <!-- Modal content -->
+      <div class="px-4 py-3 overflow-y-auto flex-1">
+        <template x-if="activeRefusalInfo">
+          <div class="space-y-4">
+            <!-- Correction status -->
+            <div>
+              <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</div>
+              <div class="text-sm">
+                <span
+                  x-show="activeRefusalInfo.was_corrected"
+                  class="inline-flex items-center px-2 py-1 rounded bg-green-100 text-green-800 font-medium"
+                >
+                  ✓ Successfully corrected
+                </span>
+                <span
+                  x-show="activeRefusalInfo.turn_1_refusal"
+                  class="inline-flex items-center px-2 py-1 rounded bg-red-100 text-red-800 font-medium"
+                >
+                  ✗ Turn 1 refusal (not correctable)
+                </span>
+                <span
+                  x-show="activeRefusalInfo.all_attempts_failed"
+                  class="inline-flex items-center px-2 py-1 rounded bg-red-100 text-red-800 font-medium"
+                >
+                  ✗ Failed after 3 attempts
+                </span>
+                <span
+                  x-show="!activeRefusalInfo.was_corrected && !activeRefusalInfo.turn_1_refusal && !activeRefusalInfo.all_attempts_failed"
+                  class="inline-flex items-center px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium"
+                >
+                  ⚠ Detected but not corrected
+                </span>
+              </div>
+            </div>
+            
+            <!-- All attempts (if multiple) -->
+            <div x-show="activeRefusalInfo.attempts && activeRefusalInfo.attempts.length > 0">
+              <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Correction Attempts</div>
+              <div class="space-y-3">
+                <template x-for="(attempt, idx) in activeRefusalInfo.attempts" :key="idx">
+                  <div class="border rounded p-3" :class="attempt.was_refusal ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'">
+                    <!-- Attempt header -->
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="font-semibold text-sm">
+                        <span x-text="`Attempt ${attempt.attempt_number}`"></span>
+                        <span x-show="attempt.attempt_number === 1" class="text-gray-500 text-xs ml-1">(original)</span>
+                      </div>
+                      <div class="text-xs font-medium" :class="attempt.was_refusal ? 'text-red-600' : 'text-green-600'">
+                        <span x-show="attempt.was_refusal">❌ Refusal</span>
+                        <span x-show="!attempt.was_refusal">✅ Valid</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Classifier response -->
+                    <div class="mb-2">
+                      <div class="text-xs text-gray-600 mb-1">Classifier:</div>
+                      <div class="text-xs bg-white rounded p-2 whitespace-pre-wrap" x-text="attempt.classifier_response"></div>
+                    </div>
+                    
+                    <!-- Turn text (if not the final successful one) -->
+                    <div x-show="attempt.turn_text && (attempt.was_refusal || idx < activeRefusalInfo.attempts.length - 1)">
+                      <div class="text-xs text-gray-600 mb-1">Generated text:</div>
+                      <div class="text-xs bg-white rounded p-2 whitespace-pre-wrap max-h-32 overflow-y-auto" x-text="attempt.turn_text"></div>
+                    </div>
+                    
+                    <!-- Error indicator -->
+                    <div x-show="attempt.error" class="mt-2 text-xs text-red-600">
+                      Generation error occurred
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            
+            <!-- Fallback: Old single classifier response (for backward compatibility) -->
+            <div x-show="!activeRefusalInfo.attempts || activeRefusalInfo.attempts.length === 0">
+              <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Classifier Response</div>
+              <div class="text-sm bg-gray-50 rounded p-3 whitespace-pre-wrap" x-text="activeRefusalInfo.classifier_response"></div>
+            </div>
+            
+            <!-- Original text (if different from corrected) - old format -->
+            <div x-show="activeRefusalInfo.was_corrected && activeRefusalInfo.original_text && (!activeRefusalInfo.attempts || activeRefusalInfo.attempts.length === 0)">
+              <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Original Response (Before Correction)</div>
+              <div class="text-sm bg-red-50 rounded p-3 whitespace-pre-wrap border border-red-200" x-text="activeRefusalInfo.original_text"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+      
+      <!-- Modal footer -->
+      <div class="px-4 py-3 border-t border-gray-200 flex justify-end">
+        <button
+          @click="showRefusalModal = false"
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 font-medium text-sm"
+        >
+          Close
         </button>
       </div>
     </div>
@@ -290,6 +423,7 @@ function chatApp() {
     isLoading: false,
     errorMessage: '',
     gameStarted: false,
+    gameBlocked: false,
 
     // Game-state placeholders
     inventoryItems: [],
@@ -299,6 +433,10 @@ function chatApp() {
     // Choice placeholders
     choice1Text: '',
     choice2Text: '',
+    
+    // Refusal info tracking
+    activeRefusalInfo: null,
+    showRefusalModal: false,
     
     // Recording state
     recorderState: 'idle',  // idle, recording, processing, error, success
@@ -473,6 +611,15 @@ function chatApp() {
     saveDraft() {
       CYOARecorder.saveDraftText(this.inputMessage);
     },
+    
+    viewRefusalDetails(message) {
+      // Extract refusal info from message
+      const refusalInfo = message.refusal_info || (message.metadata && message.metadata.refusal_info);
+      if (refusalInfo) {
+        this.activeRefusalInfo = refusalInfo;
+        this.showRefusalModal = true;
+      }
+    },
 
     async newConversation() {
       try {
@@ -502,6 +649,7 @@ function chatApp() {
           this.choice1Text = '';
           this.choice2Text = '';
           this.gameStarted = false;
+          this.gameBlocked = false;
 
           window.history.pushState({}, '', `/chat/?conversation_id=${this.conversationId}`);
         }
@@ -579,13 +727,20 @@ function chatApp() {
         const data = await response.json();
 
         if (data.error) {
+          // Only show generic errors in the banner
           this.errorMessage = data.error;
         } else if (data.message) {
+          // Push the message (even if it's an error message)
           this.messages.push(data.message);
           this.scrollToBottom();
 
           // Mark game as started once we get a response
           this.gameStarted = true;
+          
+          // Block game if indicated by backend
+          if (data.game_blocked) {
+            this.gameBlocked = true;
+          }
 
           // Update game state if backend returns it
           if (data.state) {
@@ -620,10 +775,16 @@ function chatApp() {
 
       this.gameStarted = true;
       
-      // Find the last assistant message to extract state
+      // Find the last assistant message to extract state (refusal info now per-message)
       for (let i = this.messages.length - 1; i >= 0; i--) {
         if (this.messages[i].role === 'assistant') {
-          const text = this.messages[i].content;
+          const message = this.messages[i];
+          const text = message.content;
+          
+          // Check if this is an error message - if so, block the game
+          if (message.metadata && message.metadata.is_error) {
+            this.gameBlocked = true;
+          }
           
           // Extract Turn X of Y
           const turnMatch = text.match(/Turn\s+(\d+)\s+(?:of|\/)\s+(\d+)/i);
