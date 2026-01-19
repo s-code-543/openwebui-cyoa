@@ -646,6 +646,108 @@ def import_models(request):
 
 
 @debug_login_bypass
+@require_http_methods(["POST"])
+def remove_models(request):
+    """
+    Remove selected models from the database.
+    """
+    import json
+    data = json.loads(request.body)
+    
+    provider_id = data.get('provider_id')
+    model_ids = data.get('model_ids', [])
+    
+    if not provider_id or not model_ids:
+        return JsonResponse({'success': False, 'message': 'Missing provider or models'})
+    
+    try:
+        provider = APIProvider.objects.get(pk=provider_id)
+        
+        # Delete models with the specified model identifiers
+        deleted_count, _ = LLMModel.objects.filter(
+            provider=provider,
+            model_identifier__in=model_ids
+        ).delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Removed {deleted_count} models from {provider.name}'
+        })
+    
+    except APIProvider.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Provider not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+
+
+@debug_login_bypass
+@require_http_methods(["POST"])
+def sync_provider_models(request, provider_id):
+    """
+    Scan provider for valid models and remove any that are no longer available.
+    Also marks existing models as available/unavailable based on current provider state.
+    """
+    try:
+        provider = APIProvider.objects.get(pk=provider_id)
+        
+        # Fetch current models from provider
+        if provider.provider_type == 'ollama':
+            available_models = get_ollama_models(provider.base_url)
+        elif provider.provider_type == 'anthropic':
+            available_models = get_anthropic_models(provider.api_key)
+        else:
+            return JsonResponse({'success': False, 'message': 'Unknown provider type'})
+        
+        if not available_models:
+            return JsonResponse({
+                'success': False,
+                'message': f'Could not fetch models from {provider.name}. Provider may be unavailable.'
+            })
+        
+        # Get set of valid model identifiers from provider
+        valid_model_ids = {model['id'] for model in available_models}
+        
+        # Get all existing models for this provider
+        existing_models = LLMModel.objects.filter(provider=provider)
+        
+        # Remove models that are no longer available from provider
+        removed_count = 0
+        updated_count = 0
+        for model in existing_models:
+            if model.model_identifier not in valid_model_ids:
+                model.delete()
+                removed_count += 1
+            elif not model.is_available:
+                # Re-enable models that are now available
+                model.is_available = True
+                model.save()
+                updated_count += 1
+        
+        message_parts = []
+        if removed_count > 0:
+            message_parts.append(f'removed {removed_count} invalid models')
+        if updated_count > 0:
+            message_parts.append(f'updated {updated_count} models')
+        
+        if message_parts:
+            message = f'Sync complete: {" and ".join(message_parts)}'
+        else:
+            message = 'All models are in sync with provider'
+        
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'removed_count': removed_count,
+            'updated_count': updated_count
+        })
+    
+    except APIProvider.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Provider not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+
+
+@debug_login_bypass
 def difficulty_list(request):
     """
     List all difficulty profiles.

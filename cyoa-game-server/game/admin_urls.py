@@ -28,6 +28,8 @@ urlpatterns = [
     path('models/', admin_views.model_list, name='model_list'),
     path('models/browse/<int:provider_id>/', admin_views.browse_provider_models, name='browse_provider_models'),
     path('models/import/', admin_views.import_models, name='import_models'),
+    path('models/remove/', admin_views.remove_models, name='remove_models'),
+    path('models/sync/<int:provider_id>/', admin_views.sync_provider_models, name='sync_provider_models'),
     
     # Difficulty Profile Management
     path('difficulty/', admin_views.difficulty_list, name='difficulty_list'),

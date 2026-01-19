@@ -48,8 +48,8 @@
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" 
                            value="{{ model.id }}"
-                           {% if model.imported %}disabled checked{% endif %}
-                           x-on:change="toggleModel('{{ model.id }}')"
+                           {% if model.imported %}checked{% endif %}
+                           x-on:change="toggleModel('{{ model.id }}', {{ model.imported|lower }})"
                            class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                     
                     <div class="ml-3 flex-1">
@@ -103,16 +103,23 @@
         </a>
         
         <div class="space-x-2">
+            <button x-on:click="syncModels()" 
+                    x-bind:disabled="syncing"
+                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                <span x-show="!syncing">🔄 Scan & Sync</span>
+                <span x-show="syncing">Syncing...</span>
+            </button>
+            
             <button x-on:click="selectAll()" 
                     class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
                 Select All Available
             </button>
             
-            <button x-on:click="importSelected()" 
-                    x-bind:disabled="selectedCount === 0 || importing"
+            <button x-on:click="applyChanges()" 
+                    x-bind:disabled="!hasChanges || applying"
                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
-                <span x-show="!importing">Import Selected Models</span>
-                <span x-show="importing">Importing...</span>
+                <span x-show="!applying">Apply Changes</span>
+                <span x-show="applying">Applying...</span>
             </button>
         </div>
     </div>
@@ -149,6 +156,8 @@
 {
     "providerId": {{ provider.id }},
     "importModelsUrl": "{% url 'admin:import_models' %}",
+    "removeModelsUrl": "{% url 'admin:remove_models' %}",
+    "syncModelsUrl": "{% url 'admin:sync_provider_models' provider.id %}",
     "csrfToken": "{{ csrf_token }}"
 }
 </script>
@@ -157,55 +166,136 @@
 function modelBrowser() {
     const config = JSON.parse(document.getElementById('browse-models-data').textContent);
     
+    // Track initial state of checkboxes
+    const initialState = new Map();
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        initialState.set(cb.value, cb.checked);
+    });
+    
     return {
-        selectedModels: [],
-        importing: false,
+        toImport: [],
+        toRemove: [],
+        applying: false,
+        syncing: false,
         statusMessage: null,
         statusSuccess: false,
         
-        get selectedCount() {
-            return this.selectedModels.length;
+        get hasChanges() {
+            return this.toImport.length > 0 || this.toRemove.length > 0;
         },
         
-        toggleModel(modelId) {
-            const index = this.selectedModels.indexOf(modelId);
-            if (index > -1) {
-                this.selectedModels.splice(index, 1);
-            } else {
-                this.selectedModels.push(modelId);
+        get selectedCount() {
+            return document.querySelectorAll('input[type="checkbox"]:checked').length;
+        },
+        
+        toggleModel(modelId, wasImported) {
+            const checkbox = document.querySelector(`input[value="${modelId}"]`);
+            const isNowChecked = checkbox.checked;
+            
+            // Remove from both arrays first
+            this.toImport = this.toImport.filter(id => id !== modelId);
+            this.toRemove = this.toRemove.filter(id => id !== modelId);
+            
+            // Determine what changed
+            if (wasImported && !isNowChecked) {
+                // Was imported, now unchecked = remove it
+                this.toRemove.push(modelId);
+            } else if (!wasImported && isNowChecked) {
+                // Was not imported, now checked = import it
+                this.toImport.push(modelId);
             }
         },
         
         selectAll() {
-            // Select all non-imported models
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]:not(:disabled)');
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach(cb => {
                 if (!cb.checked) {
                     cb.checked = true;
-                    this.selectedModels.push(cb.value);
+                    const wasImported = initialState.get(cb.value) || false;
+                    this.toggleModel(cb.value, wasImported);
                 }
             });
         },
         
-        async importSelected() {
-            if (this.selectedModels.length === 0) {
+        async applyChanges() {
+            if (!this.hasChanges) {
                 return;
             }
             
-            this.importing = true;
+            this.applying = true;
             this.statusMessage = null;
             
             try {
-                const response = await fetch(config.importModelsUrl, {
+                let results = [];
+                
+                // Import new models
+                if (this.toImport.length > 0) {
+                    const importResponse = await fetch(config.importModelsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': config.csrfToken
+                        },
+                        body: JSON.stringify({
+                            provider_id: config.providerId,
+                            model_ids: this.toImport
+                        })
+                    });
+                    
+                    const importResult = await importResponse.json();
+                    results.push(importResult);
+                }
+                
+                // Remove models
+                if (this.toRemove.length > 0) {
+                    const removeResponse = await fetch(config.removeModelsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': config.csrfToken
+                        },
+                        body: JSON.stringify({
+                            provider_id: config.providerId,
+                            model_ids: this.toRemove
+                        })
+                    });
+                    
+                    const removeResult = await removeResponse.json();
+                    results.push(removeResult);
+                }
+                
+                // Check if all operations succeeded
+                const allSuccess = results.every(r => r.success);
+                this.statusSuccess = allSuccess;
+                this.statusMessage = results.map(r => r.message).join('. ');
+                
+                if (allSuccess) {
+                    // Clear changes and reload page after a delay
+                    this.toImport = [];
+                    this.toRemove = [];
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                this.statusSuccess = false;
+                this.statusMessage = 'Operation failed: ' + error.message;
+            } finally {
+                this.applying = false;
+            }
+        },
+        
+        async syncModels() {
+            this.syncing = true;
+            this.statusMessage = null;
+            
+            try {
+                const response = await fetch(config.syncModelsUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': config.csrfToken
-                    },
-                    body: JSON.stringify({
-                        provider_id: config.providerId,
-                        model_ids: this.selectedModels
-                    })
+                    }
                 });
                 
                 const result = await response.json();
@@ -213,17 +303,16 @@ function modelBrowser() {
                 this.statusMessage = result.message;
                 
                 if (result.success) {
-                    // Clear selection and reload page after a delay
-                    this.selectedModels = [];
+                    // Reload page after a delay to show updated model list
                     setTimeout(() => {
                         window.location.reload();
                     }, 2000);
                 }
             } catch (error) {
                 this.statusSuccess = false;
-                this.statusMessage = 'Import failed: ' + error.message;
+                this.statusMessage = 'Sync failed: ' + error.message;
             } finally {
-                this.importing = false;
+                this.syncing = false;
             }
         }
     }
