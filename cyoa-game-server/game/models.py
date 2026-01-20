@@ -12,25 +12,31 @@ class Prompt(models.Model):
     Store different versions of prompts for the game.
     prompt_type categories:
     - 'adventure': Story/adventure prompts for storytelling
-    - 'turn-correction': Prompts for correcting refused regular turns
-    - 'game-ending-correction': Prompts for correcting refused game-ending/death turns
+    - 'turn-correction': Prompts for correcting refused turns (both regular and game-ending)
     - 'game-ending': Prompts for generating death/failure scenes
     - 'classifier': Prompts for detecting refusals
-    - 'judge': Future - quality assessment prompts
     
     Each prompt has its own title/name for identification within its type.
     """
     
+    # User-friendly display names for prompt types
+    PROMPT_TYPE_DISPLAY = {
+        'adventure': 'Adventure Prompts',
+        'turn-correction': 'Turn Correction Prompts',
+        'game-ending': 'Game Ending Prompts',
+        'classifier': 'Classifier Prompts',
+    }
+    
     prompt_type = models.CharField(
         max_length=50,
         db_index=True,
-        help_text="Category: adventure, turn-correction, game-ending-correction, game-ending, classifier, judge"
+        help_text="Category: adventure, turn-correction, game-ending, classifier"
     )
     name = models.CharField(
         max_length=100,
         db_index=True,
         default='default',
-        help_text="Descriptive name for this prompt (e.g., 'haunted-house', 'v1-default')"
+        help_text="Descriptive name for this prompt (e.g., 'haunted-house', 'correct_refusal')"
     )
     version = models.IntegerField(
         help_text="Version number (1, 2, 3, ...)"
@@ -43,9 +49,10 @@ class Prompt(models.Model):
     prompt_text = models.TextField(
         help_text="The actual prompt content"
     )
-    is_active = models.BooleanField(
-        default=False,
-        help_text="Whether this prompt is currently active for API calls"
+    file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Path to the source .txt file for this prompt (relative to cyoa_prompts/)"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,22 +61,18 @@ class Prompt(models.Model):
         unique_together = ['prompt_type', 'name', 'version']
         ordering = ['prompt_type', 'name', '-version']
         indexes = [
-            models.Index(fields=['prompt_type', 'is_active']),
             models.Index(fields=['prompt_type', 'name']),
         ]
     
     def __str__(self):
-        active = " [ACTIVE]" if self.is_active else ""
-        return f"{self.prompt_type}/{self.name} v{self.version}{active}"
+        return f"{self.prompt_type}/{self.name} v{self.version}"
+    
+    @classmethod
+    def get_type_display_name(cls, prompt_type):
+        """Get user-friendly display name for a prompt type."""
+        return cls.PROMPT_TYPE_DISPLAY.get(prompt_type, prompt_type.replace('-', ' ').title())
     
     def save(self, *args, **kwargs):
-        # If this prompt is being set as active, deactivate all other prompts of the same type+name
-        if self.is_active:
-            Prompt.objects.filter(
-                prompt_type=self.prompt_type,
-                name=self.name,
-                is_active=True
-            ).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
 
 
@@ -162,7 +165,7 @@ class Configuration(models.Model):
         on_delete=models.PROTECT,
         related_name='configs_as_turn_correction',
         limit_choices_to={'prompt_type': 'turn-correction'},
-        help_text="Turn correction prompt for regenerating refused or problematic turns"
+        help_text="Turn correction prompt for regenerating refused turns"
     )
     turn_correction_model = models.ForeignKey(
         'LLMModel',
@@ -179,8 +182,10 @@ class Configuration(models.Model):
         Prompt,
         on_delete=models.PROTECT,
         related_name='configs_as_game_ending_turn_correction',
-        limit_choices_to={'prompt_type': 'game-ending-correction'},
-        help_text="Turn correction prompt specifically for game-ending turns"
+        limit_choices_to={'prompt_type': 'turn-correction'},
+        null=True,
+        blank=True,
+        help_text="Turn correction prompt specifically for game-ending turns (optional, falls back to turn_correction_prompt)"
     )
     game_ending_prompt = models.ForeignKey(
         Prompt,

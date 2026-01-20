@@ -114,14 +114,29 @@ def audit_detail(request, log_id):
 @debug_login_bypass
 def prompt_list(request):
     """
-    List all prompts grouped by type.
+    List all prompts grouped by type, then by name, with versions collapsed.
     """
     # Get all unique prompt types dynamically
     prompt_types = Prompt.objects.values_list('prompt_type', flat=True).distinct().order_by('prompt_type')
+    
+    # Structure: { type_display_name: { 'type_code': code, 'prompts': { name: [versions] } } }
     prompts_by_type = {}
     
     for prompt_type in prompt_types:
-        prompts_by_type[prompt_type] = Prompt.objects.filter(prompt_type=prompt_type).order_by('-version')
+        display_name = Prompt.get_type_display_name(prompt_type)
+        prompts = Prompt.objects.filter(prompt_type=prompt_type).order_by('name', '-version')
+        
+        # Group by name
+        prompts_by_name = {}
+        for prompt in prompts:
+            if prompt.name not in prompts_by_name:
+                prompts_by_name[prompt.name] = []
+            prompts_by_name[prompt.name].append(prompt)
+        
+        prompts_by_type[display_name] = {
+            'type_code': prompt_type,
+            'prompts_by_name': prompts_by_name,
+        }
     
     context = {
         'prompts_by_type': prompts_by_type,
@@ -151,18 +166,19 @@ def prompt_editor(request, prompt_id=None):
                 return redirect('admin:prompt_editor', prompt_id=prompt.id)
         
         elif action == 'save_new_version':
-            # Create new version
+            # Create new version of the same prompt name
             if prompt:
                 max_version = Prompt.objects.filter(
-                    prompt_type=prompt.prompt_type
+                    prompt_type=prompt.prompt_type,
+                    name=prompt.name
                 ).order_by('-version').first().version
                 
                 new_prompt = Prompt.objects.create(
                     prompt_type=prompt.prompt_type,
+                    name=prompt.name,
                     version=max_version + 1,
                     description=request.POST.get('description', ''),
                     prompt_text=request.POST.get('prompt_text', ''),
-                    is_active=False
                 )
                 messages.success(request, f'Created new version: {new_prompt}')
                 return redirect('admin:prompt_editor', prompt_id=new_prompt.id)
@@ -170,44 +186,106 @@ def prompt_editor(request, prompt_id=None):
         elif action == 'create':
             # Create brand new prompt
             prompt_type = request.POST.get('prompt_type')
+            name = request.POST.get('name', '').strip()
             
-            # Find next version number
-            max_version = Prompt.objects.filter(
-                prompt_type=prompt_type
-            ).order_by('-version').first()
-            next_version = (max_version.version + 1) if max_version else 1
-            
-            new_prompt = Prompt.objects.create(
-                prompt_type=prompt_type,
-                version=next_version,
-                description=request.POST.get('description', ''),
-                prompt_text=request.POST.get('prompt_text', ''),
-                is_active=False
-            )
-            messages.success(request, f'Created {new_prompt}')
-            return redirect('admin:prompt_editor', prompt_id=new_prompt.id)
+            if not name:
+                messages.error(request, 'Prompt name is required')
+            else:
+                # Check if a prompt with this name already exists for version handling
+                existing = Prompt.objects.filter(
+                    prompt_type=prompt_type,
+                    name=name
+                ).order_by('-version').first()
+                next_version = (existing.version + 1) if existing else 1
+                
+                new_prompt = Prompt.objects.create(
+                    prompt_type=prompt_type,
+                    name=name,
+                    version=next_version,
+                    description=request.POST.get('description', ''),
+                    prompt_text=request.POST.get('prompt_text', ''),
+                )
+                messages.success(request, f'Created {new_prompt}')
+                return redirect('admin:prompt_editor', prompt_id=new_prompt.id)
         
-        elif action == 'set_active':
+        elif action == 'save_to_disk':
+            # Write prompt to file on disk
             if prompt:
-                prompt.is_active = True
-                prompt.save()
-                messages.success(request, f'Set {prompt} as active')
+                try:
+                    result = save_prompt_to_disk(prompt)
+                    messages.success(request, result)
+                except Exception as e:
+                    messages.error(request, f'Failed to save to disk: {e}')
                 return redirect('admin:prompt_editor', prompt_id=prompt.id)
     
-    # Get all versions of the same type for version selector
+    # Get all versions of the same prompt name for version selector
     versions = []
     if prompt:
-        versions = Prompt.objects.filter(prompt_type=prompt.prompt_type)
+        versions = Prompt.objects.filter(
+            prompt_type=prompt.prompt_type,
+            name=prompt.name
+        ).order_by('-version')
     
-    # Get all unique prompt types for the dropdown
-    prompt_types = Prompt.objects.values_list('prompt_type', flat=True).distinct().order_by('prompt_type')
+    # Define available prompt types
+    prompt_type_choices = [
+        ('adventure', 'Adventure Prompt'),
+        ('turn-correction', 'Turn Correction Prompt'),
+        ('game-ending', 'Game Ending Prompt'),
+        ('classifier', 'Classifier Prompt'),
+    ]
     
     context = {
         'prompt': prompt,
         'versions': versions,
-        'prompt_types': list(prompt_types),
+        'prompt_types': prompt_type_choices,
     }
     return render(request, 'cyoa_admin/prompt_editor.html', context)
+
+
+def save_prompt_to_disk(prompt):
+    """
+    Write a prompt to its corresponding .txt file on disk.
+    Creates the file if it doesn't exist, or overwrites if it does.
+    Returns a success message.
+    """
+    import os
+    
+    # Determine base directory
+    if os.path.exists('/story_prompts'):
+        base_dir = '/story_prompts'
+    else:
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        base_dir = os.path.join(project_root, 'cyoa_prompts')
+    
+    # Map prompt type to directory
+    type_to_dir = {
+        'adventure': 'story_prompts',
+        'turn-correction': 'turn_correction_prompts',
+        'game-ending': 'game_ending_prompts',
+        'classifier': 'classifier_prompts',
+    }
+    
+    dir_name = type_to_dir.get(prompt.prompt_type)
+    if not dir_name:
+        raise ValueError(f"Unknown prompt type: {prompt.prompt_type}")
+    
+    # Build filename with version
+    filename = f"{prompt.name}_v{prompt.version}.txt"
+    filepath = os.path.join(base_dir, dir_name, filename)
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    
+    # Write content
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(prompt.prompt_text)
+    
+    # Update file_path in model
+    relative_path = f"{dir_name}/{filename}"
+    prompt.file_path = relative_path
+    prompt.save(update_fields=['file_path'])
+    
+    return f'Saved to {relative_path}'
 
 
 @debug_login_bypass
@@ -252,7 +330,6 @@ def config_editor(request, config_id=None):
     # Get available prompts by type
     adventure_prompts = Prompt.objects.filter(prompt_type='adventure').order_by('name', '-version')
     turn_correction_prompts = Prompt.objects.filter(prompt_type='turn-correction').order_by('name', '-version')
-    game_ending_turn_correction_prompts = Prompt.objects.filter(prompt_type='game-ending-correction').order_by('name', '-version')
     game_ending_prompts = Prompt.objects.filter(prompt_type='game-ending').order_by('name', '-version')
     classifier_prompts = Prompt.objects.filter(prompt_type='classifier').order_by('name', '-version')
     
@@ -380,7 +457,6 @@ def config_editor(request, config_id=None):
         'all_models': LLMModel.objects.all().order_by('provider__name', 'name'),
         'adventure_prompts': adventure_prompts,
         'turn_correction_prompts': turn_correction_prompts,
-        'game_ending_turn_correction_prompts': game_ending_turn_correction_prompts,
         'game_ending_prompts': game_ending_prompts,
         'classifier_prompts': classifier_prompts,
         'difficulties': difficulties,

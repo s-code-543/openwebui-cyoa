@@ -2,43 +2,43 @@
 
 {% block page_title %}{% if prompt %}Edit Prompt{% else %}New Prompt{% endif %}{% endblock %}
 
+{% block extra_head %}
+<!-- EasyMDE Markdown Editor -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="px-4 sm:px-0" x-data="{ 
-    showPreview: false,
-    previewHtml: '',
-    async updatePreview() {
-        const text = document.getElementById('prompt_text').value;
-        const formData = new FormData();
-        formData.append('text', text);
-        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-        
-        const response = await fetch('{% url 'admin:preview_markdown' %}', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
-        this.previewHtml = data.html;
-        this.showPreview = true;
-    }
-}">
+<div class="px-4 sm:px-0">
     <div class="mb-4">
         <a href="{% url 'admin:prompt_list' %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">
-            ← Back to Prompts
+            &larr; Back to Prompts
         </a>
     </div>
 
     {% if prompt %}
-    <!-- Version Selector -->
+    <!-- Version Selector and Info -->
     <div class="bg-white shadow rounded-lg mb-6 p-4">
-        <label class="block text-sm font-medium text-gray-700 mb-2">Switch Version</label>
-        <select onchange="if(this.value) window.location.href=this.value" 
-                class="block w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-            {% for v in versions %}
-            <option value="{% url 'admin:prompt_editor' v.id %}" {% if v.id == prompt.id %}selected{% endif %}>
-                v{{ v.version }}{% if v.is_active %} (Active){% endif %} - {{ v.description|truncatewords:8 }}
-            </option>
-            {% endfor %}
-        </select>
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">{{ prompt.name }}</h2>
+                <p class="text-sm text-gray-500">Type: {{ prompt.prompt_type }}</p>
+                {% if prompt.file_path %}
+                <p class="text-xs text-indigo-600 mt-1">File: {{ prompt.file_path }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Switch Version</label>
+                <select onchange="if(this.value) window.location.href=this.value" 
+                        class="block w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    {% for v in versions %}
+                    <option value="{% url 'admin:prompt_editor' v.id %}" {% if v.id == prompt.id %}selected{% endif %}>
+                        v{{ v.version }} - {{ v.description|truncatewords:8|default:"No description" }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
     </div>
     {% endif %}
 
@@ -47,15 +47,23 @@
         
         <div class="bg-white shadow rounded-lg p-6">
             {% if not prompt %}
-            <!-- New Prompt Type Selection -->
+            <!-- New Prompt Fields -->
             <div class="mb-6">
-                <label for="prompt_type" class="block text-sm font-medium text-gray-700 mb-2">Prompt Type</label>
+                <label for="prompt_type" class="block text-sm font-medium text-gray-700 mb-2">Prompt Type *</label>
                 <select name="prompt_type" id="prompt_type" required
                         class="block w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                     {% for type_code, type_name in prompt_types %}
                     <option value="{{ type_code }}">{{ type_name }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            
+            <div class="mb-6">
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-2">Prompt Name *</label>
+                <input type="text" name="name" id="name" required
+                       placeholder="e.g., haunted-house-prompt, correct_refusal"
+                       class="block w-full max-w-md rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <p class="mt-1 text-xs text-gray-500">Use lowercase with hyphens or underscores. This becomes part of the filename.</p>
             </div>
             {% endif %}
 
@@ -72,48 +80,15 @@
 
             <!-- Prompt Text Editor -->
             <div class="mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <label for="prompt_text" class="block text-sm font-medium text-gray-700">
-                        Prompt Text
-                    </label>
-                    <div class="flex space-x-2">
-                        <button type="button" @click="updatePreview()" 
-                                class="text-sm text-indigo-600 hover:text-indigo-900 font-medium">
-                            Preview Markdown
-                        </button>
-                    </div>
-                </div>
+                <label for="prompt_text" class="block text-sm font-medium text-gray-700 mb-2">
+                    Prompt Text *
+                </label>
                 
-                <!-- Formatting Toolbar -->
-                <div class="flex space-x-2 mb-2 p-2 bg-gray-50 rounded-md border border-gray-300">
-                    <button type="button" onclick="wrapSelection('**', '**')" 
-                            class="px-2 py-1 text-sm font-bold border border-gray-300 rounded hover:bg-gray-100" title="Bold">
-                        B
-                    </button>
-                    <button type="button" onclick="wrapSelection('*', '*')" 
-                            class="px-2 py-1 text-sm italic border border-gray-300 rounded hover:bg-gray-100" title="Italic">
-                        I
-                    </button>
-                    <button type="button" onclick="insertAtCursor('- ')" 
-                            class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100" title="Bullet">
-                        •
-                    </button>
-                    <button type="button" onclick="insertAtCursor('1. ')" 
-                            class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100" title="Number">
-                        1.
-                    </button>
-                    <button type="button" onclick="indentSelection()" 
-                            class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100" title="Indent">
-                        →
-                    </button>
-                </div>
-
                 <textarea name="prompt_text" id="prompt_text" required
-                          oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';"
-                          style="min-height: 400px; resize: vertical;"
+                          style="min-height: 400px;"
                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono">{{ prompt.prompt_text }}</textarea>
                 
-                <p class="mt-2 text-sm text-gray-500">
+                <p class="mt-2 text-sm text-gray-500" id="editor_info">
                     <span id="char_count">{{ prompt.prompt_text|length|default:0 }}</span> characters
                 </p>
             </div>
@@ -121,8 +96,8 @@
 
         <!-- Action Buttons -->
         <div class="bg-white shadow rounded-lg p-6">
-            <div class="flex justify-between items-center">
-                <div class="space-x-3">
+            <div class="flex justify-between items-center flex-wrap gap-3">
+                <div class="flex flex-wrap gap-3">
                     {% if prompt %}
                     <button type="submit" name="action" value="save"
                             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
@@ -132,16 +107,13 @@
                             class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
                         Save as New Version
                     </button>
-                    {% if not prompt.is_active %}
-                    <button type="submit" name="action" value="set_active"
+                    <button type="submit" name="action" value="save_to_disk"
                             class="inline-flex items-center px-4 py-2 border border-green-300 text-sm font-medium rounded-md shadow-sm text-green-700 bg-green-50 hover:bg-green-100">
-                        Set as Active
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Save to Disk
                     </button>
-                    {% else %}
-                    <span class="inline-flex items-center px-4 py-2 text-sm font-medium text-green-800">
-                        ✓ Currently Active
-                    </span>
-                    {% endif %}
                     {% else %}
                     <button type="submit" name="action" value="create"
                             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
@@ -152,72 +124,79 @@
             </div>
         </div>
     </form>
-
-    <!-- Markdown Preview Modal -->
-    <div x-show="showPreview" 
-         x-cloak
-         @click.self="showPreview = false"
-         class="fixed inset-0 z-50 overflow-y-auto bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="text-lg font-medium text-gray-900">Markdown Preview</h3>
-                <button @click="showPreview = false" class="text-gray-400 hover:text-gray-500">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <div class="px-6 py-4 prose max-w-none" x-html="previewHtml"></div>
-        </div>
-    </div>
 </div>
 
 <script>
-// Auto-expand textarea to fit content on page load
-window.addEventListener('load', function() {
+// Initialize EasyMDE if available, otherwise fallback to basic textarea
+document.addEventListener('DOMContentLoaded', function() {
     const textarea = document.getElementById('prompt_text');
-    textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
-});
-
-// Character counter
-document.getElementById('prompt_text').addEventListener('input', function(e) {
-    document.getElementById('char_count').textContent = e.target.value.length;
-});
-
-// Text formatting functions
-function wrapSelection(before, after) {
-    const textarea = document.getElementById('prompt_text');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
+    const charCount = document.getElementById('char_count');
+    const editorInfo = document.getElementById('editor_info');
     
-    textarea.value = text.substring(0, start) + before + selected + after + text.substring(end);
-    textarea.focus();
-    textarea.setSelectionRange(start + before.length, end + before.length);
-}
-
-function insertAtCursor(text) {
-    const textarea = document.getElementById('prompt_text');
-    const start = textarea.selectionStart;
-    const value = textarea.value;
+    if (typeof EasyMDE !== 'undefined') {
+        // EasyMDE loaded successfully
+        try {
+            const easyMDE = new EasyMDE({
+                element: textarea,
+                spellChecker: false,
+                autofocus: false,
+                minHeight: '400px',
+                status: ['lines', 'words', 'cursor'],
+                toolbar: [
+                    'bold', 'italic', 'heading', '|',
+                    'quote', 'unordered-list', 'ordered-list', '|',
+                    'link', 'code', '|',
+                    'preview', 'side-by-side', 'fullscreen', '|',
+                    'guide'
+                ],
+                placeholder: 'Enter your prompt text here...',
+                renderingConfig: {
+                    singleLineBreaks: false,
+                    codeSyntaxHighlighting: true,
+                }
+            });
+            
+            // Update character count
+            function updateCharCount() {
+                const text = easyMDE.value();
+                charCount.textContent = text.length;
+            }
+            
+            easyMDE.codemirror.on('change', updateCharCount);
+            updateCharCount();
+            
+            // Update info text
+            editorInfo.innerHTML = '<span id="char_count">' + charCount.textContent + 
+                                   '</span> characters · EasyMDE editor loaded';
+            
+        } catch (error) {
+            console.error('EasyMDE initialization failed:', error);
+            fallbackToBasicEditor();
+        }
+    } else {
+        // EasyMDE not available, use basic editor
+        fallbackToBasicEditor();
+    }
     
-    textarea.value = value.substring(0, start) + text + value.substring(start);
-    textarea.focus();
-    textarea.setSelectionRange(start + text.length, start + text.length);
-}
-
-function indentSelection() {
-    const textarea = document.getElementById('prompt_text');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
-    
-    const indented = selected.split('\n').map(line => '  ' + line).join('\n');
-    textarea.value = text.substring(0, start) + indented + text.substring(end);
-    textarea.focus();
-}
-</script>
+    function fallbackToBasicEditor() {
+        // Basic textarea functionality
+        textarea.style.resize = 'vertical';
+        
+        // Auto-expand
+        function autoExpand() {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+        
+        // Character counter
+        textarea.addEventListener('input', function() {
+            charCount.textContent = textarea.value.length;
+            autoExpand();
+        });
+        
+        autoExpand();
+        editorInfo.innerHTML = '<span id="char_count">' + charCount.textContent + 
+                               '</span> characters · Basic editor (EasyMDE unavailable)';
+    }
+});</script>
 {% endblock %}

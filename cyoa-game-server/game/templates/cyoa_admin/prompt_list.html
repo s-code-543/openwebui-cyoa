@@ -11,34 +11,75 @@
         </a>
     </div>
 
-    {% for type_name, prompts in prompts_by_type.items %}
+    {% for type_display, type_data in prompts_by_type.items %}
     <div class="bg-white shadow rounded-lg mb-6 overflow-hidden">
         <div class="px-4 py-5 sm:px-6 border-b border-gray-200 bg-gray-50">
-            <h3 class="text-lg font-medium leading-6 text-gray-900">{{ type_name }}</h3>
+            <h3 class="text-lg font-medium leading-6 text-gray-900">{{ type_display }}</h3>
         </div>
         <div class="px-4 py-5 sm:p-6">
-            {% if prompts %}
-            <div class="space-y-4">
-                {% for prompt in prompts %}
-                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg {% if prompt.is_active %}bg-indigo-50 border-indigo-300{% endif %}">
-                    <div class="flex-1">
-                        <div class="flex items-center">
-                            <p class="text-sm font-medium text-gray-900">
-                                Version {{ prompt.version }}
-                                {% if prompt.is_active %}
-                                <span class="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
-                                    Active
-                                </span>
-                                {% endif %}
-                            </p>
+            {% if type_data.prompts_by_name %}
+            <div class="space-y-3">
+                {% for name, versions in type_data.prompts_by_name.items %}
+                <div class="border border-gray-200 rounded-lg overflow-hidden" x-data="{ open: false }">
+                    <!-- Prompt Header (Accordion Toggle) -->
+                    <button @click="open = !open" 
+                            class="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform" 
+                                 :class="{ 'rotate-90': open }"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <div class="text-left">
+                                <p class="text-base font-semibold text-gray-900">{{ name }}</p>
+                                <p class="text-sm text-gray-500">
+                                    {{ versions|length }} version{{ versions|length|pluralize }}
+                                    {% with versions.0 as latest %}
+                                    {% if latest.description %} &middot; {{ latest.description }}{% endif %}
+                                    {% endwith %}
+                                </p>
+                            </div>
                         </div>
-                        <p class="mt-1 text-sm text-gray-500">{{ prompt.description|default:"No description" }}</p>
-                        <p class="mt-1 text-xs text-gray-400">Created: {{ prompt.created_at|date:"M d, Y" }} | Updated: {{ prompt.updated_at|date:"M d, Y" }}</p>
-                    </div>
-                    <div class="ml-4 flex space-x-2">
-                        <a href="{% url 'admin:prompt_editor' prompt.id %}" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                            Edit
-                        </a>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-500">
+                                Latest: v{{ versions.0.version }}
+                            </span>
+                            <a href="{% url 'admin:prompt_editor' versions.0.id %}" 
+                               @click.stop
+                               class="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
+                                Edit
+                            </a>
+                        </div>
+                    </button>
+                    
+                    <!-- Versions List (Collapsible) -->
+                    <div x-show="open" 
+                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         class="border-t border-gray-200 bg-gray-50">
+                        {% for prompt in versions %}
+                        <div class="flex items-center justify-between px-4 py-3 {% if not forloop.last %}border-b border-gray-200{% endif %}">
+                            <div class="flex items-center space-x-4 pl-8">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-800">
+                                    v{{ prompt.version }}
+                                </span>
+                                <div>
+                                    <p class="text-sm text-gray-700">{{ prompt.description|default:"No description" }}</p>
+                                    <p class="text-xs text-gray-400">
+                                        Updated: {{ prompt.updated_at|date:"M d, Y" }}
+                                        {% if prompt.file_path %}
+                                        &middot; <span class="text-indigo-600">{{ prompt.file_path }}</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <a href="{% url 'admin:prompt_editor' prompt.id %}" 
+                               class="text-sm text-indigo-600 hover:text-indigo-900">
+                                Edit
+                            </a>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
                 {% endfor %}
@@ -47,6 +88,10 @@
             <p class="text-gray-500 text-sm">No prompts of this type yet.</p>
             {% endif %}
         </div>
+    </div>
+    {% empty %}
+    <div class="bg-white shadow rounded-lg p-6 text-center">
+        <p class="text-gray-500">No prompts found. Click "New Prompt" to create one.</p>
     </div>
     {% endfor %}
 </div>
