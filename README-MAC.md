@@ -1,6 +1,8 @@
-# openwebui-cyoa - macOS Setup Guide
+# LLM CYOA - macOS Setup Guide
 
-This guide documents the macOS (Apple Silicon) setup for components that have been tested and verified working.
+This guide documents the macOS (Apple Silicon) setup for the LLM Choose Your Own Adventure game server.
+
+> **Note:** This project now uses centralized nginx routing. See [NGINX-MIGRATION.md](NGINX-MIGRATION.md) for the new architecture.
 
 ---
 
@@ -14,6 +16,10 @@ This guide documents the macOS (Apple Silicon) setup for components that have be
 - **Docker Desktop** for Mac
   - Install via [Docker Website](https://www.docker.com/products/docker-desktop/) or `brew install --cask docker`
   - Ensure it is running before starting the stack
+- **Shared Docker Network** - Create once:
+  ```bash
+  docker network create stargate-shared --driver bridge
+  ```
 
 ---
 
@@ -123,89 +129,87 @@ You should see JSON with the transcription of JFK's speech.
 
 ---
 
-## Open Web UI Setup
+## SSL Setup
+
+Tips for using this app with subdomain based routing from centralized docker network nginx
 
 ### 1. Create SSL Certificates
 
-Generate self-signed certificates for HTTPS access (required for mobile):
+Generate self-signed certificates for HTTPS access:
 
 ```bash
-cd /Users/$(whoami)/openwebui-cyoa
+cd /Users/$(whoami)/nginx
 mkdir -p ssl
 
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout ssl/openwebui.key \
-  -out ssl/openwebui.crt \
-  -subj "/C=US/ST=State/L=City/O=Stargate/CN=mac.stargate.lan" \
-  -addext "subjectAltName=DNS:mac.stargate.lan,DNS:*.stargate.lan,DNS:localhost,IP:127.0.0.1"
+  -keyout ssl/openwebui+cyoa-key.pem \
+  -out ssl/openwebui+cyoa.pem \
+  -subj "/C=US/ST=State/L=City/O=Home/CN=cyoa.mac.stargate.lan" \
+  -addext "subjectAltName=DNS:cyoa.mac.stargate.lan,DNS:openwebui.mac.stargate.lan,DNS:*.stargate.lan,DNS:localhost,IP:127.0.0.1"
 ```
-
-**Note:** Replace `mac.stargate.lan` with your actual local hostname if different.
 
 ### 2. Set Environment Variables
 
 Create a `.env` file with your API keys:
 
 ```bash
-cd /Users/$(whoami)/openwebui-cyoa
+cd /Users/yolo/llm-cyoa
 cat <<EOF > .env
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 EOF
 ```
 
-### 3. Start the Containers
+### 3. Start the Services
 
-Ensure Docker Desktop is running, then start the stack:
+**Important:** Start nginx gateway first, then individual services.
 
 ```bash
-cd /Users/$(whoami)/openwebui-cyoa
+# 1. Start central nginx gateway (handles TLS termination)
+cd /Users/$(whoami)/nginx
+docker compose up -d
 
-# Start the containers (detached mode)
+# 2. Start CYOA game server
+cd /Users/$(whoami)/llm-cyoa
 docker compose -f docker-compose.mac.yml up -d
 
-# Or to watch logs (foreground)
-docker compose -f docker-compose.mac.yml up
+# Watch logs (optional)
+docker compose -f docker-compose.mac.yml logs -f
 ```
 
-### 4. Access Open Web UI
+### 4. Access the Game
 
-- **URL:** https://openwebui.mac.stargate.lan (or your configured local hostname)
+- **HTTPS (recommended):** https://cyoa.mac.stargate.lan
+- **Direct HTTP (debugging):** http://localhost:8001
 
-Accept the self-signed certificate warning in your browser.
-
-### 5. Verify Services
-
-In Open Web UI, Ollama models should appear automatically. Whisper STT should work when you use the microphone button.
-
-### 6. Configure Audio Settings (Important!)
-
-To prevent the microphone from cutting you off after short pauses:
-
-1. Go to **Settings → Audio** (user settings, not admin settings)
-2. Find **"Speech Auto-Send"** toggle
-3. **Turn it ON**, then click **Save**
-4. **Turn it OFF**, then click **Save** again
-
-This toggle dance is required due to a UI quirk - it ensures the setting is properly applied and the recorder waits for you to manually stop instead of auto-detecting silence.
+Accept the self-signed certificate warning in your browser on first visit.
 
 ---
 
-## CYOA Game Server Setup
+## TLS Termination
 
-The CYOA Game Server is a standalone backend application that manages the game state, story generation, and difficulty system. It is **no longer** just an Open Web UI proxy.
+**TLS is handled by the centralized nginx gateway** at `/Users/$(whoami)/nginx`. The CYOA game server exposes HTTP only on the internal Docker network (`stargate-shared`).
+
+For direct HTTP access without TLS (e.g., debugging), the service optionally exposes port 8001 on localhost. See [NGINX-MIGRATION.md](NGINX-MIGRATION.md) for details.
+
+---
+
+## CYOA Game Server
+
+The CYOA Game Server is a Django application that manages the game state, story generation, and difficulty system.
 
 ### Architecture
 
-- **Server:** Django (Python) application managing game logic and prompting.
-- **Database:** SQLite for storing game turns, prompts, and judging statistics.
-- **Speech-to-Text:** Configured to use the local Whisper.cpp service via speaches/openai-compatible API.
+- **Server:** Django (Python) application managing game logic and prompting
+- **Database:** SQLite for storing game turns, prompts, and judging statistics
+- **Speech-to-Text:** Uses the local Whisper.cpp service via OpenAI-compatible API
+- **LLM Router:** Supports multiple providers (Anthropic, OpenAI, OpenRouter, Ollama)
 
-### 1. Start the Server
+### Managing the Server
 
 The server starts automatically with the docker stack, but you can manage it independently:
 
 ```bash
-cd /Users/$(whoami)/openwebui-cyoa
+cd /Users/$(whoami)/llm-cyoa
 
 # Build/Rebuild and start
 docker compose -f docker-compose.mac.yml up -d --build cyoa-game-server
@@ -214,7 +218,7 @@ docker compose -f docker-compose.mac.yml up -d --build cyoa-game-server
 docker compose -f docker-compose.mac.yml logs -f cyoa-game-server
 ```
 
-### 2. Load Prompts (First Run & Updates)
+### Load Prompts (First Run & Updates)
 
 The system uses text files in `cyoa_prompts/` as the source of truth for Adventure, Judge, and Game Ending prompts.
 
@@ -234,13 +238,13 @@ docker exec -it cyoa-game-server python manage.py load_prompts
 3. It will automatically be imported as a new Adventure type.
 4. Alternatively, you can create prompts directly in the Admin Database interface.
 
-### 3. Access the Admin Interface
+### Access the Admin Interface
 
 - **URL:** https://cyoa.mac.stargate.lan/admin/
 
 No account creation is required; you will be directed to the dashboard.
 
-### 4. Workshopping the Game Master Prompt
+### Workshopping the Game Master Prompt
 
 1. **Admin Tab:** Open the Admin interface in one browser tab. Navigate to the Prompts section to edit the active Judge or Adventure prompts.
 2. **Game Tab:** Play the game in another tab.
