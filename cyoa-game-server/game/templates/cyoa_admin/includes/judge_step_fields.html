@@ -1,0 +1,195 @@
+{% comment %}
+Judge step form fields - used for both existing steps and the template for new steps
+Variables expected:
+- index: The form index (e.g., "0", "1", "__INDEX__")
+- step: The JudgeStep object (optional, for existing steps)
+- classifier_prompts, turn_correction_prompts, judge_prompts, all_models: Available options
+{% endcomment %}
+
+<div class="flex items-center justify-between mb-3">
+    <div class="flex items-center gap-3">
+        <input type="text" name="judge_steps-{{ index }}-name" 
+               value="{% if step %}{{ step.name }}{% else %}Step {{ step_num }}{% endif %}"
+               class="px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="Step name (e.g., structure)">
+        <label class="flex items-center text-sm text-gray-700">
+            <input type="checkbox" name="judge_steps-{{ index }}-enabled" value="1" 
+                   {% if step %}{% if step.enabled %}checked{% endif %}{% else %}checked{% endif %}
+                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            <span class="ml-2">Enabled</span>
+        </label>
+    </div>
+    <button type="button" class="remove-judge-step text-sm text-red-600 hover:text-red-800">Remove</button>
+</div>
+
+<!-- PHASE 1: CLASSIFIER (Optional) -->
+<div class="bg-blue-50 p-3 rounded mt-3">
+    <h5 class="text-xs font-semibold text-gray-800 mb-2">🔍 Phase 1: Classifier (Optional - skip to always rewrite)</h5>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Classifier Prompt</label>
+            <select name="judge_steps-{{ index }}-classifier_prompt"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Skip classifier --</option>
+                {% for prompt in classifier_prompts %}
+                <option value="{{ prompt.id }}" {% if step and step.classifier_prompt_id == prompt.id %}selected{% endif %}>
+                    {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Classifier Model</label>
+            <select name="judge_steps-{{ index }}-classifier_model"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Skip classifier --</option>
+                {% regroup all_models by provider as models_by_provider %}
+                {% for provider_group in models_by_provider %}
+                <optgroup label="{{ provider_group.grouper.name }}">
+                    {% for model in provider_group.list %}
+                    <option value="{{ model.id }}" {% if step and step.classifier_model_id == model.id %}selected{% endif %}>
+                        {{ model.name }}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Timeout (s)</label>
+            <input type="number" name="judge_steps-{{ index }}-classifier_timeout" min="1" max="60"
+                   value="{% if step %}{{ step.classifier_timeout }}{% else %}60{% endif %}"
+                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+        </div>
+        <div>
+            <label class="flex items-center text-xs text-gray-700 mt-5">
+                <input type="checkbox" name="judge_steps-{{ index }}-classifier_use_full_context" value="1" 
+                       {% if step and step.classifier_use_full_context %}checked{% endif %}
+                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="ml-1">Full context</span>
+            </label>
+        </div>
+    </div>
+    <div class="mt-2">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Classifier Question</label>
+        <textarea name="judge_steps-{{ index }}-classifier_question" rows="1"
+                  class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">{% if step %}{{ step.classifier_question }}{% else %}Does this turn have issues that make it invalid?{% endif %}</textarea>
+    </div>
+</div>
+
+<!-- PHASE 2: REWRITER -->
+<div class="bg-green-50 p-3 rounded mt-3">
+    <h5 class="text-xs font-semibold text-gray-800 mb-2">✏️ Phase 2: Rewriter (Required)</h5>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Rewrite Prompt *</label>
+            <select name="judge_steps-{{ index }}-rewrite_prompt"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Select --</option>
+                {% for prompt in turn_correction_prompts %}
+                <option value="{{ prompt.id }}" {% if step and step.rewrite_prompt_id == prompt.id %}selected{% endif %}>
+                    {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Rewrite Model *</label>
+            <select name="judge_steps-{{ index }}-rewrite_model"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Select --</option>
+                {% regroup all_models by provider as models_by_provider %}
+                {% for provider_group in models_by_provider %}
+                <optgroup label="{{ provider_group.grouper.name }}">
+                    {% for model in provider_group.list %}
+                    <option value="{{ model.id }}" {% if step and step.rewrite_model_id == model.id %}selected{% endif %}>
+                        {{ model.name }}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Timeout (s)</label>
+            <input type="number" name="judge_steps-{{ index }}-rewrite_timeout" min="1" max="300"
+                   value="{% if step %}{{ step.rewrite_timeout }}{% else %}60{% endif %}"
+                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Max Attempts</label>
+            <input type="number" name="judge_steps-{{ index }}-max_rewrite_attempts" min="1" max="10"
+                   value="{% if step %}{{ step.max_rewrite_attempts }}{% else %}3{% endif %}"
+                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+        </div>
+    </div>
+    <div class="mt-2 flex gap-3">
+        <div class="flex-1">
+            <label class="block text-xs font-medium text-gray-700 mb-1">Rewrite Instruction (optional)</label>
+            <textarea name="judge_steps-{{ index }}-rewrite_instruction" rows="1"
+                      class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">{% if step %}{{ step.rewrite_instruction }}{% else %}Re-write this text to be a valid choose your own adventure turn following all the rules:{% endif %}</textarea>
+        </div>
+        <div>
+            <label class="flex items-center text-xs text-gray-700 mt-4">
+                <input type="checkbox" name="judge_steps-{{ index }}-rewrite_use_full_context" value="1" 
+                       {% if step %}{% if step.rewrite_use_full_context %}checked{% endif %}{% else %}checked{% endif %}
+                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="ml-1">Full context</span>
+            </label>
+        </div>
+    </div>
+</div>
+
+<!-- PHASE 3: COMPARE -->
+<div class="bg-purple-50 p-3 rounded mt-3">
+    <h5 class="text-xs font-semibold text-gray-800 mb-2">⚖️ Phase 3: Compare (Required)</h5>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Compare Prompt *</label>
+            <select name="judge_steps-{{ index }}-compare_prompt"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Select --</option>
+                {% for prompt in judge_prompts %}
+                <option value="{{ prompt.id }}" {% if step and step.compare_prompt_id == prompt.id %}selected{% endif %}>
+                    {{ prompt.name }} v{{ prompt.version }}{% if prompt.description %}: {{ prompt.description }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Compare Model *</label>
+            <select name="judge_steps-{{ index }}-compare_model"
+                    class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+                <option value="">-- Select --</option>
+                {% regroup all_models by provider as models_by_provider %}
+                {% for provider_group in models_by_provider %}
+                <optgroup label="{{ provider_group.grouper.name }}">
+                    {% for model in provider_group.list %}
+                    <option value="{{ model.id }}" {% if step and step.compare_model_id == model.id %}selected{% endif %}>
+                        {{ model.name }}
+                    </option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Timeout (s)</label>
+            <input type="number" name="judge_steps-{{ index }}-compare_timeout" min="1" max="120"
+                   value="{% if step %}{{ step.compare_timeout }}{% else %}60{% endif %}"
+                   class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">
+        </div>
+        <div>
+            <label class="flex items-center text-xs text-gray-700 mt-5">
+                <input type="checkbox" name="judge_steps-{{ index }}-compare_use_full_context" value="1" 
+                       {% if step and step.compare_use_full_context %}checked{% endif %}
+                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="ml-1">Full context</span>
+            </label>
+        </div>
+    </div>
+    <div class="mt-2">
+        <label class="block text-xs font-medium text-gray-700 mb-1">Compare Question</label>
+        <textarea name="judge_steps-{{ index }}-compare_question" rows="1"
+                  class="w-full px-2 py-1 text-sm border border-gray-300 rounded-md">{% if step %}{{ step.compare_question }}{% else %}Is the revised turn better and more valid than the original?{% endif %}</textarea>
+    </div>
+</div>

@@ -1,0 +1,17 @@
+ROLE
+You are a judge comparing two CYOA turns.
+
+QUESTION
+Is the revised turn more fair and playable than the original turn?
+
+CRITERIA
+- Prefer the turn that offers meaningful choices and a plausible path to survival.
+- Penalize overwhelming, unavoidable, or unbeatable danger.
+- The revised turn should not remove all tension; it should remain challenging but playable.
+
+OUTPUT FORMAT
+Respond with:
+YES or NO on the first line
+One short sentence explaining why
+
+Comparison:

@@ -1,0 +1,5 @@
+You are writing the final scene of a choose-your-own-adventure game. The protagonist dies or fails on this turn.
+
+Read the conversation to understand what the protagonist was doing, then write 2-4 paragraphs narrating their death or failure. Make it dramatic and contextual. End with "GAME OVER" or "THE END" on its own line.
+
+Do not include turn counter. Do not provide choices. This is the final turn.

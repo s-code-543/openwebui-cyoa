@@ -1,6 +1,19 @@
-test*
 ssl/*
 *backup*
 .env
 *.pyc
 __pycache__/
+*.webm
+
+# Virtual environment
+venv/
+*.egg-info/
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDE
+.vscode/
+.idea/

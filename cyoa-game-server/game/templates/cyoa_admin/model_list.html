@@ -1,0 +1,250 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}LLM Models{% endblock %}
+
+{% block page_title %}LLM Models{% endblock %}
+
+{% block content %}
+<div x-data="modelManager()" class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-xl text-gray-600">Registered Models</h2>
+            <p class="text-sm text-gray-500 mt-1">
+                Showing <span x-text="filteredModels.length"></span> of <span x-text="allModels.length"></span> models
+            </p>
+        </div>
+        <a href="{% url 'admin:provider_list' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+            → Manage Providers
+        </a>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="bg-white shadow-md rounded-lg p-4">
+        <div class="flex gap-4 items-center">
+            <div class="flex-1">
+                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search Models</label>
+                <input type="text" 
+                       id="search"
+                       x-model="searchQuery"
+                       autocomplete="off"
+                       placeholder="Search by model name or ID..."
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+            
+            <div class="w-64">
+                <label for="provider-filter" class="block text-sm font-medium text-gray-700 mb-1">Filter by Provider</label>
+                <select id="provider-filter"
+                        x-model="providerFilter"
+                        autocomplete="off"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="">All Providers</option>
+                    {% for provider in providers %}
+                    <option value="{{ provider.id }}">{{ provider.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+<div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            <template x-for="model in filteredModels" :key="model.id">
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900" x-text="model.name"></div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span x-show="model.provider_type === 'ollama'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                        🦙 Ollama
+                    </span>
+                    <span x-show="model.provider_type === 'anthropic'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                        🤖 Anthropic
+                    </span>
+                    <span x-show="model.provider_type === 'openai'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        ⚡ OpenAI
+                    </span>
+                    <span x-show="model.provider_type === 'openrouter'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        🌐 OpenRouter
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div x-text="model.provider_name"></div>
+                    <div class="text-xs text-gray-400" x-text="'Provider ID: ' + model.provider_id"></div>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                    <code class="bg-gray-100 px-2 py-1 rounded text-xs" x-text="model.model_identifier"></code>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span x-show="model.is_available" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        ✓ Available
+                    </span>
+                    <span x-show="!model.is_available" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        Unavailable
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <a :href="'/admin/providers/' + model.provider_id + '/'" class="text-blue-600 hover:text-blue-900">View Provider</a>
+                    <button @click="deleteModel(model.id, model.name)" class="text-red-600 hover:text-red-900">Delete</button>
+                </td>
+            </tr>
+            </template>
+            
+            <tr x-show="filteredModels.length === 0">
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                    <div class="text-lg mb-2">No models found</div>
+                    <p class="text-sm mb-4" x-text="searchQuery ? 'Try a different search' : 'Add a provider and import models to get started'"></p>
+                    <a href="{% url 'admin:provider_list' %}" class="text-blue-600 hover:text-blue-900">
+                        → Go to Providers
+                    </a>
+                </td>
+            </tr>
+            {% if not models %}
+            <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                    <div class="text-lg mb-2">No models registered</div>
+                    <p class="text-sm mb-4">Add a provider and import models to get started</p>
+                    <a href="{% url 'admin:provider_list' %}" class="text-blue-600 hover:text-blue-900">
+                        → Go to Providers
+                    </a>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Status Messages -->
+<div x-show="statusMessage" x-cloak class="mt-6">
+    <div x-bind:class="statusSuccess ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'" 
+         class="border-l-4 p-4 rounded">
+        <div class="flex">
+            <div class="ml-3">
+                <p x-bind:class="statusSuccess ? 'text-green-700' : 'text-red-700'" class="text-sm whitespace-pre-line" x-text="statusMessage"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Provider Quick Links -->
+{% if providers %}
+<div class="bg-white shadow-md rounded-lg p-6">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">Browse Models from Providers</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for provider in providers %}
+        <a href="{% url 'admin:browse_provider_models' provider.id %}" 
+           class="block p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-medium text-gray-900">{{ provider.name }}</div>
+                    <div class="text-sm text-gray-500">
+                        {% if provider.provider_type == 'ollama' %}🦙 Ollama
+                        {% elif provider.provider_type == 'anthropic' %}🤖 Anthropic
+                        {% elif provider.provider_type == 'openai' %}⚡ OpenAI
+                        {% elif provider.provider_type == 'openrouter' %}🌐 OpenRouter
+                        {% endif %}
+                    </div>
+                </div>
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+</div>
+
+<script id="models-data" type="application/json">
+[
+    {% for model in models %}
+    {
+        "id": {{ model.id }},
+        "name": "{{ model.name|escapejs }}",
+        "model_identifier": "{{ model.model_identifier|escapejs }}",
+        "provider_id": {{ model.provider.id }},
+        "provider_name": "{{ model.provider.name|escapejs }}",
+        "provider_type": "{{ model.provider.provider_type }}",
+        "is_available": {{ model.is_available|lower }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+]
+</script>
+
+<script>
+function modelManager() {
+    const allModels = JSON.parse(document.getElementById('models-data').textContent);
+    
+    return {
+        allModels: allModels,
+        searchQuery: '',
+        providerFilter: '',
+        statusMessage: null,
+        statusSuccess: false,
+        
+        get filteredModels() {
+            let filtered = this.allModels;
+            
+            // Apply search filter
+            if (this.searchQuery.trim()) {
+                const query = this.searchQuery.toLowerCase();
+                filtered = filtered.filter(model => 
+                    model.name.toLowerCase().includes(query) ||
+                    model.model_identifier.toLowerCase().includes(query) ||
+                    model.provider_name.toLowerCase().includes(query)
+                );
+            }
+            
+            // Apply provider filter
+            if (this.providerFilter) {
+                const providerId = parseInt(this.providerFilter);
+                filtered = filtered.filter(model => model.provider_id === providerId);
+            }
+            
+            return filtered;
+        },
+        
+        async deleteModel(modelId, modelName) {
+            if (!confirm(`Delete model "${modelName}"?\n\nThis will remove the model from your system. You can re-import it later from the provider.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/models/${modelId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+                
+                const result = await response.json();
+                this.statusSuccess = result.success;
+                this.statusMessage = result.message;
+                
+                if (result.success) {
+                    // Remove from local array
+                    this.allModels = this.allModels.filter(m => m.id !== modelId);
+                    setTimeout(() => {
+                        this.statusMessage = null;
+                    }, 3000);
+                }
+            } catch (error) {
+                this.statusSuccess = false;
+                this.statusMessage = 'Failed to delete model: ' + error.message;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

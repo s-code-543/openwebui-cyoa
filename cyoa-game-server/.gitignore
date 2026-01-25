@@ -1,0 +1,43 @@
+# Django
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+*.pot
+db.sqlite3
+db.sqlite3-journal
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Media files (test-generated)
+media/stt_recordings/*.wav
+media/stt_recordings/*.webm
+media/stt_recordings/*.mp3
+media/stt_recordings/*.m4a
+!media/stt_recordings/.gitkeep
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

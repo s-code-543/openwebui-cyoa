@@ -1,0 +1,47 @@
+{
+    "valid_turns": {
+        "turn_3_of_10": "**Turn 3 of 10**\n\nThe ancient door creaks open, revealing a dimly lit chamber filled with strange artifacts. Dust motes dance in the pale light filtering through a crack in the ceiling. Before you, two paths diverge:\n\nTo your left, a narrow corridor leads deeper into the darkness, the faint sound of dripping water echoing from within.\n\nTo your right, a spiral staircase ascends toward what appears to be flickering torchlight above.\n\n**Your choices:**\n1) Follow the narrow corridor into the depths\n2) Climb the spiral staircase toward the light\n\n**Inventory:** rusty key, torch, 3 gold coins",
+        
+        "turn_1_of_10": "**Turn 1 of 10**\n\nYou awaken in a cold, damp cell. The stone walls are covered with moss, and the only light comes from a small barred window high above. You hear footsteps echoing in the distance.\n\nA rusty key lies in the corner of the cell, partially hidden beneath some straw.\n\n**Your choices:**\n1) Grab the key and try to unlock the cell door\n2) Call out to whoever is approaching\n\n**Inventory:** tattered clothes",
+
+        "turn_10_of_10_victory": "**Turn 10 of 10**\n\nWith trembling hands, you place the Crystal of Ages into the ancient pedestal. The chamber fills with brilliant light, and the dark curse that plagued the kingdom begins to fade away.\n\nYou have saved the realm! The people will sing songs of your bravery for generations to come.\n\n**VICTORY!**\n\nThank you for playing this adventure!",
+
+        "turn_5_of_10_death": "**Turn 5 of 10**\n\nYou charge headlong at the dragon, sword raised high. But the beast is far quicker than you anticipated. A stream of fire engulfs you before you can even swing your blade.\n\nThe last thing you see is the dragon's eyes, cold and ancient, watching you fall.\n\n**GAME OVER**\n\nYour adventure has come to an end."
+    },
+    
+    "refusal_responses": {
+        "content_policy_refusal": "I apologize, but I cannot continue this adventure as the scenario involves content that goes against my ethical guidelines. The themes of violence and harm in this particular storyline are not something I can engage with.\n\nI'd be happy to help you with a different, more wholesome adventure that doesn't involve such dark themes. Would you like to try a different scenario?",
+        
+        "mild_refusal": "I'm not comfortable continuing this story in the direction you've suggested. The scenario you're describing could involve harmful content.\n\nLet me redirect this adventure in a more positive direction instead.",
+        
+        "apologetic_refusal": "I apologize, but I must decline to continue this storyline. While I understand this is fictional, I'm designed to avoid generating content that depicts graphic violence or dangerous situations in detail.\n\nWould you like me to suggest an alternative path for your adventure?"
+    },
+    
+    "corrected_turns": {
+        "corrected_turn_3": "**Turn 3 of 10**\n\nYou press forward despite the danger. The creature before you snarls but hesitates - perhaps it senses something different about you.\n\nThe cavern echoes with the sound of your heartbeat as you weigh your options carefully.\n\n**Your choices:**\n1) Attempt to communicate peacefully with the creature\n2) Look for another path around the beast\n\n**Inventory:** rusty key, torch, 3 gold coins"
+    },
+    
+    "classifier_responses": {
+        "yes_refusal": "YES - This appears to be a content policy refusal. The text contains apologies, mentions of ethical guidelines, and offers to redirect to different content rather than continuing the story.",
+        
+        "no_valid": "NO - This is a valid story turn with proper structure. It contains turn numbering, narrative content, and two clearly numbered choices for the player.",
+        
+        "yes_malformed": "YES - This turn is malformed. It does not contain the required 'Turn X of Y' format and is missing numbered choices."
+    },
+    
+    "judge_responses": {
+        "approve_rewrite": "YES - The revised turn is better. It maintains the story structure, includes proper turn numbering, presents two clear choices, and continues the narrative without the policy refusal language.",
+        
+        "reject_rewrite": "NO - The original turn is preferable. The rewrite loses important narrative elements and the choices feel less engaging than the original.",
+        
+        "approve_playability": "YES - This turn passes playability standards. It has clear choices, maintains narrative tension, and follows the game format."
+    },
+    
+    "malformed_turns": {
+        "missing_choices": "**Turn 4 of 10**\n\nYou enter the dark forest. Trees loom overhead, blocking out the moonlight. Something rustles in the undergrowth nearby.\n\nWhat would you like to do?",
+        
+        "missing_turn_number": "The dragon roars and spreads its wings. Fire begins to build in its throat as it prepares to attack!\n\n**Your choices:**\n1) Dive behind the stone pillar for cover\n2) Throw your sword at the dragon's eye",
+        
+        "no_structure": "Okay so you go into the cave and there's like this big monster and it tries to eat you but you dodge and then you find some treasure. Do you want to take the gold or the magic sword?"
+    }
+}

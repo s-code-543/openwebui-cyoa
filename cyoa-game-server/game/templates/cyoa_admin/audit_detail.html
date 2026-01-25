@@ -1,0 +1,88 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block page_title %}Audit Detail #{{ log.id }}{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0">
+    <div class="mb-4">
+        <a href="{% url 'admin:audit_log' %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">
+            ← Back to Audit Log
+        </a>
+    </div>
+
+    <!-- Metadata -->
+    <div class="bg-white shadow rounded-lg mb-6 p-6">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <p class="text-sm font-medium text-gray-500">Timestamp</p>
+                <p class="mt-1 text-sm text-gray-900">{{ log.timestamp|date:"M d, Y H:i:s" }}</p>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-500">Status</p>
+                <p class="mt-1">
+                    {% if log.was_refusal %}
+                    <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                        🚫 Refusal Detected
+                    </span>
+                    {% elif log.was_modified %}
+                    <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                        Modified by Judge
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        Passed Through Unchanged
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-500">Prompt Used</p>
+                <p class="mt-1 text-sm text-gray-900">
+                    {% if log.prompt_used %}
+                    <a href="{% url 'admin:prompt_editor' log.prompt_used.id %}" class="text-indigo-600 hover:text-indigo-900">
+                        {{ log.prompt_used }}
+                    </a>
+                    {% else %}
+                    <span class="text-gray-400">Unknown</span>
+                    {% endif %}
+                </p>
+            </div>
+            {% if log.was_refusal %}
+            <div>
+                <p class="text-sm font-medium text-gray-500">Classifier Response</p>
+                <p class="mt-1 text-sm text-gray-900">{{ log.classifier_response|default:"N/A" }}</p>
+            </div>
+            {% endif %}
+            {% if log.details %}
+            <div class="col-span-2">
+                <p class="text-sm font-medium text-gray-500">Judge Details</p>
+                <pre class="mt-1 text-xs bg-gray-50 rounded p-3 whitespace-pre-wrap text-gray-700">{{ log.details }}</pre>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Comparison -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Original -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-sm font-medium text-gray-900">Original (Storyteller Output)</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                <pre class="whitespace-pre-wrap text-sm text-gray-900 font-mono">{{ log.original_text }}</pre>
+            </div>
+        </div>
+
+        <!-- Refined -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-3 border-b border-gray-200 {% if log.was_modified %}bg-yellow-50{% else %}bg-green-50{% endif %}">
+                <h3 class="text-sm font-medium text-gray-900">Final Output (After Judge)</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                <pre class="whitespace-pre-wrap text-sm text-gray-900 font-mono">{{ log.refined_text }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

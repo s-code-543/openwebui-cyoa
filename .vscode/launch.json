@@ -2,22 +2,47 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Django: Run (host conda: cyoa-py312)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/cyoa-game-server/manage.py",
+      "args": ["runserver", "0.0.0.0:8001"],
+      "django": true,
+      "justMyCode": false,
+      "python": "${env:HOME}/miniconda3/envs/cyoa-py312/bin/python",
+      "cwd": "${workspaceFolder}/cyoa-game-server",
+      "env": { "PYTHONUNBUFFERED": "1", "DJANGO_DEBUG": "1" },
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Attach to Django in Docker",
       "type": "debugpy",
       "request": "attach",
-      "connect": {
-        "host": "localhost",
-        "port": 5678
-      },
+      "connect": { "host": "localhost", "port": 5678 },
       "pathMappings": [
-        {
-          "localRoot": "${workspaceFolder}/cyoa-game-server",
-          "remoteRoot": "/app"
-        }
+        { "localRoot": "${workspaceFolder}/cyoa-game-server", "remoteRoot": "/app" }
       ],
       "justMyCode": false,
       "django": true,
       "redirectOutput": true
+    },
+    {
+      "name": "_noop (for compounds)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/cyoa-game-server/manage.py",
+      "args": ["--help"],
+      "python": "${env:HOME}/miniconda3/envs/cyoa-py312/bin/python",
+      "cwd": "${workspaceFolder}/cyoa-game-server",
+      "console": "internalConsole",
+      "justMyCode": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Tests (task)",
+      "configurations": ["_noop (for compounds)"],
+      "preLaunchTask": "Tests: run_tests.sh (conda: cyoa-py312)"
     }
   ]
 }

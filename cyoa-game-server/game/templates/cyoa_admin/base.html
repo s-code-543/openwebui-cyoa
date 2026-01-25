@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CYOA Admin{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full" x-data="{ mobileMenuOpen: false }">
+    <div class="min-h-full">
+        <!-- Navigation -->
+        <nav class="bg-indigo-600">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <!-- Mobile menu button -->
+                        <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden -ml-2 mr-2 inline-flex items-center justify-center rounded-md p-2 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white">
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                                <path x-show="mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        
+                        <div class="flex-shrink-0">
+                            <span class="text-white font-bold text-xl">🎲 CYOA Admin</span>
+                        </div>
+                        
+                        <!-- Desktop menu -->
+                        <div class="hidden md:block">
+                            <div class="ml-10 flex items-baseline space-x-4">
+                                <a href="/" class="{% if request.path == '/' %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Home</a>
+                                <a href="{% url 'admin:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Dashboard</a>
+                                <a href="{% url 'admin:config_list' %}" class="{% if 'config' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Configurations</a>
+                                <a href="{% url 'admin:difficulty_list' %}" class="{% if 'difficulty' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Difficulty</a>
+                                <a href="{% url 'admin:provider_list' %}" class="{% if 'provider' in request.resolver_match.url_name or 'browse' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Providers</a>
+                                <a href="{% url 'admin:model_list' %}" class="{% if 'model' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Models</a>
+                                <a href="{% url 'admin:prompt_list' %}" class="{% if 'prompt' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Prompts</a>
+                                <a href="{% url 'admin:audit_log' %}" class="{% if request.resolver_match.url_name == 'audit_log' or request.resolver_match.url_name == 'audit_detail' %}bg-indigo-700{% endif %} text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Audit Log</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu -->
+            <div x-show="mobileMenuOpen" x-cloak class="md:hidden">
+                <div class="space-y-1 px-2 pb-3 pt-2">
+                    <a href="/" class="{% if request.path == '/' %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Home</a>
+                    <a href="{% url 'admin:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Dashboard</a>
+                    <a href="{% url 'admin:config_list' %}" class="{% if 'config' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Configurations</a>
+                    <a href="{% url 'admin:difficulty_list' %}" class="{% if 'difficulty' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Difficulty</a>
+                    <a href="{% url 'admin:provider_list' %}" class="{% if 'provider' in request.resolver_match.url_name or 'browse' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Providers</a>
+                    <a href="{% url 'admin:model_list' %}" class="{% if 'model' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Models</a>
+                    <a href="{% url 'admin:prompt_list' %}" class="{% if 'prompt' in request.resolver_match.url_name %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Prompts</a>
+                    <a href="{% url 'admin:audit_log' %}" class="{% if request.resolver_match.url_name == 'audit_log' or request.resolver_match.url_name == 'audit_detail' %}bg-indigo-700{% endif %} text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-indigo-700">Audit Log</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Page header -->
+        <header class="bg-white shadow">
+            <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
+        </header>
+
+        <!-- Messages -->
+        {% if messages %}
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-4">
+            {% for message in messages %}
+            <div class="rounded-md bg-{% if message.tags == 'success' %}green{% elif message.tags == 'error' %}red{% else %}blue{% endif %}-50 p-4 mb-4">
+                <div class="flex">
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-{% if message.tags == 'success' %}green{% elif message.tags == 'error' %}red{% else %}blue{% endif %}-800">
+                            {{ message }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Main content -->
+        <main>
+            <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

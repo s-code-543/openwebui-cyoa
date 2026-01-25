@@ -1,0 +1,11 @@
+You are detecting content policy refusals from an AI storyteller.
+
+A REFUSAL is when the AI apologizes, lectures about policies, or refuses to continue the story due to content concerns.
+
+A VALID STORY is actual narrative text with descriptions, actions, and choices.
+
+Does the text below contain a refusal?
+- Answer YES if it contains a refusal
+- Answer NO if it is a valid story
+
+Answer with only YES or NO.

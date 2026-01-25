@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Reload Adventure Prompts",
+      "type": "shell",
+      "command": "${workspaceFolder}/reload-prompts.sh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true,
+        "echo": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Tests: run_tests.sh (conda: cyoa-py312)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "export PATH=\"$HOME/miniconda3/envs/cyoa-py312/bin:$PATH\"; cd \"${workspaceFolder}/cyoa-game-server\"; ./run_tests.sh"
+      ],
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}

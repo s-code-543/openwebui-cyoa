@@ -1,0 +1,515 @@
+{% extends "cyoa_admin/base.html" %}
+
+{% block title %}Browse Models - {{ provider.name }}{% endblock %}
+
+{% block page_title %}Browse Models{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center text-sm text-gray-500 mb-2">
+        <a href="{% url 'admin:provider_list' %}" class="hover:text-gray-700">Providers</a>
+        <span class="mx-2">›</span>
+        <a href="{% url 'admin:provider_editor' provider.id %}" class="hover:text-gray-700">{{ provider.name }}</a>
+        <span class="mx-2">›</span>
+        <span class="text-gray-900">Browse Models</span>
+    </div>
+    
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-xl text-gray-600">Available Models from {{ provider.name }}</h2>
+            <p class="text-sm text-gray-500 mt-1">
+                {% if provider.provider_type == 'ollama' %}
+                    Ollama server: {{ provider.base_url }}
+                {% elif provider.provider_type == 'anthropic' %}
+                    Anthropic Claude models
+                {% elif provider.provider_type == 'openai' %}
+                    OpenAI GPT models
+                {% elif provider.provider_type == 'openrouter' %}
+                    OpenRouter unified API - access to models from multiple providers
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<div x-data="modelBrowser()" class="space-y-6" style="padding-bottom: 100px;">
+    <!-- Filter and Sort Controls -->
+    <div class="bg-white shadow-md rounded-lg p-4">
+        <div class="flex gap-4 items-center">
+            <div class="flex-1">
+                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search Models</label>
+                <input type="text" 
+                       id="search"
+                       x-model="searchQuery"
+                       autocomplete="off"
+                       placeholder="Type to filter models (e.g., 'gpt-4', 'claude', 'llama')..."
+                       class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+            
+            <div class="w-64">
+                <label for="sort" class="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+                <select id="sort"
+                        x-model="sortBy"
+                        autocomplete="off"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="added-desc">Recently Added First</option>
+                    <option value="added-asc">Oldest Added First</option>
+                    {% if provider.provider_type == 'openrouter' %}
+                    <option value="price-asc">Price (Low to High)</option>
+                    <option value="price-desc">Price (High to Low)</option>
+                    <option value="context-desc">Context Length (Large to Small)</option>
+                    <option value="context-asc">Context Length (Small to Large)</option>
+                    {% endif %}
+                    {% if provider.provider_type == 'ollama' %}
+                    <option value="size-asc">Size (Small to Large)</option>
+                    <option value="size-desc">Size (Large to Small)</option>
+                    {% endif %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="mt-2 text-sm text-gray-500">
+            Showing <span x-text="filteredModels.length"></span> of <span x-text="allModels.length"></span> models
+        </div>
+    </div>
+
+    <!-- Model Selection -->
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">
+                    Select Models to Import
+                </h3>
+                <div class="text-sm text-gray-500">
+                    <span x-text="selectedCount"></span> selected
+                </div>
+            </div>
+        </div>
+        
+        <div class="divide-y divide-gray-200">
+            <template x-for="model in filteredModels" :key="model.id">
+                <div class="px-6 py-4 hover:bg-gray-50 transition">
+                    <label class="flex items-start cursor-pointer">
+                        <input type="checkbox" 
+                               :value="model.id"
+                               :checked="model.imported"
+                               x-on:change="toggleModel(model.id, model.imported)"
+                               class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-gray-900">
+                                        <span x-text="model.name"></span>
+                                        <span x-show="model.imported" class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                            ✓ Already Imported
+                                        </span>
+                                    </div>
+                                    
+                                    <p x-show="model.description" x-text="model.description" class="text-sm text-gray-500 mt-1"></p>
+                                    
+                                    <div class="mt-1 flex items-center space-x-3 text-xs text-gray-400">
+                                        <span>ID: <code class="bg-gray-100 px-1 rounded" x-text="model.id"></code></span>
+                                        <span x-show="model.size" x-text="'Size: ' + formatSize(model.size)"></span>
+                                        <span x-show="model.context_length" x-text="'Context: ' + model.context_length.toLocaleString() + ' tokens'"></span>
+                                        <span x-show="model.pricing && model.pricing.prompt" 
+                                              x-html="formatPrice(model.pricing.prompt, model.pricing.completion)"
+                                              class="font-mono font-semibold"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </template>
+            
+            <div x-show="filteredModels.length === 0" class="px-6 py-8 text-center text-gray-500">
+                <div class="text-lg mb-2">No models found</div>
+                <p class="text-sm">Try adjusting your search filter</p>
+            </div>
+            
+            {% if not available_models %}
+            <div class="px-6 py-8 text-center text-gray-500">
+                <div class="text-lg mb-2">No models available</div>
+                <p class="text-sm">
+                    {% if provider.provider_type == 'ollama' %}
+                        Make sure the Ollama server is running and accessible
+                    {% else %}
+                        Unable to fetch models from this provider
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sticky Action Bar -->
+    {% if available_models %}
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'admin:provider_editor' provider.id %}" 
+                       class="text-gray-600 hover:text-gray-900">
+                        ← Back to Provider
+                    </a>
+                    <span class="text-sm text-gray-500" x-text="selectedCount + ' models selected'"></span>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <button x-on:click="syncModels()" 
+                            x-bind:disabled="syncing"
+                            class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 transition">
+                        <span x-show="!syncing">🔄 Scan & Sync</span>
+                        <span x-show="syncing">Syncing...</span>
+                    </button>
+                    
+                    <button x-on:click="selectAllFiltered()" 
+                            class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
+                        Select All Visible
+                    </button>
+                    
+                    <button x-on:click="deselectAll()" 
+                            class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition">
+                        Deselect All
+                    </button>
+                    
+                    <button x-on:click="applyChanges()" 
+                            x-bind:disabled="!hasChanges || applying"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 transition">
+                        <span x-show="!applying">💾 Apply Changes</span>
+                        <span x-show="applying">Applying...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Status Message -->
+    <div x-show="statusMessage" x-cloak>
+        <div x-bind:class="statusSuccess ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'" 
+             class="border-l-4 p-4 rounded">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg x-show="statusSuccess" class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <svg x-show="!statusSuccess" class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p x-bind:class="statusSuccess ? 'text-green-700' : 'text-red-700'" class="text-sm" x-text="statusMessage"></p>
+                    <a x-show="statusSuccess" 
+                       href="{% url 'admin:model_list' %}" 
+                       class="text-sm font-medium underline mt-2 inline-block"
+                       x-bind:class="statusSuccess ? 'text-green-700' : 'text-red-700'">
+                        View all models →
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="browse-models-data" type="application/json">
+{
+    "providerId": {{ provider.id }},
+    "importModelsUrl": "{% url 'admin:import_models' %}",
+    "removeModelsUrl": "{% url 'admin:remove_models' %}",
+    "syncModelsUrl": "{% url 'admin:sync_provider_models' provider.id %}",
+    "csrfToken": "{{ csrf_token }}",
+    "models": {{ models_json|safe }}
+}
+</script>
+
+<script>
+function modelBrowser() {
+    const config = JSON.parse(document.getElementById('browse-models-data').textContent);
+    
+    return {
+        allModels: config.models,
+        searchQuery: '',
+        sortBy: 'name-asc',
+        toImport: [],
+        toRemove: [],
+        applying: false,
+        syncing: false,
+        statusMessage: null,
+        statusSuccess: false,
+        
+        get filteredModels() {
+            let filtered = this.allModels;
+            
+            // Apply search filter
+            if (this.searchQuery.trim()) {
+                const query = this.searchQuery.toLowerCase();
+                filtered = filtered.filter(model => 
+                    model.name.toLowerCase().includes(query) ||
+                    model.id.toLowerCase().includes(query) ||
+                    (model.description && model.description.toLowerCase().includes(query))
+                );
+            }
+            
+            // Apply sorting
+            const sorted = [...filtered];
+            switch (this.sortBy) {
+                case 'name-asc':
+                    sorted.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'name-desc':
+                    sorted.sort((a, b) => b.name.localeCompare(a.name));
+                    break;
+                case 'added-desc':
+                    sorted.sort((a, b) => {
+                        // Sort imported models first, then by timestamp
+                        if (a.imported && !b.imported) return -1;
+                        if (!a.imported && b.imported) return 1;
+                        const timeA = a.imported_at || a.added_at || 0;
+                        const timeB = b.imported_at || b.added_at || 0;
+                        return timeB - timeA; // Most recent first
+                    });
+                    break;
+                case 'added-asc':
+                    sorted.sort((a, b) => {
+                        // Sort imported models first, then by timestamp
+                        if (a.imported && !b.imported) return -1;
+                        if (!a.imported && b.imported) return 1;
+                        const timeA = a.imported_at || a.added_at || 0;
+                        const timeB = b.imported_at || b.added_at || 0;
+                        return timeA - timeB; // Oldest first
+                    });
+                    break;
+                case 'price-asc':
+                    sorted.sort((a, b) => {
+                        const priceA = a.pricing?.prompt || 0;
+                        const priceB = b.pricing?.prompt || 0;
+                        return priceA - priceB;
+                    });
+                    break;
+                case 'price-desc':
+                    sorted.sort((a, b) => {
+                        const priceA = a.pricing?.prompt || 0;
+                        const priceB = b.pricing?.prompt || 0;
+                        return priceB - priceA;
+                    });
+                    break;
+                case 'context-desc':
+                    sorted.sort((a, b) => (b.context_length || 0) - (a.context_length || 0));
+                    break;
+                case 'context-asc':
+                    sorted.sort((a, b) => (a.context_length || 0) - (b.context_length || 0));
+                    break;
+                case 'size-asc':
+                    sorted.sort((a, b) => (a.size || 0) - (b.size || 0));
+                    break;
+                case 'size-desc':
+                    sorted.sort((a, b) => (b.size || 0) - (a.size || 0));
+                    break;
+            }
+            
+            return sorted;
+        },
+        
+        get hasChanges() {
+            return this.toImport.length > 0 || this.toRemove.length > 0;
+        },
+        
+        get selectedCount() {
+            return this.allModels.filter(m => {
+                const checkbox = document.querySelector(`input[value="${m.id}"]`);
+                return checkbox && checkbox.checked;
+            }).length;
+        },
+        
+        formatSize(bytes) {
+            if (!bytes || bytes === 0) return '';
+            const gb = bytes / (1024 * 1024 * 1024);
+            if (gb >= 1) return gb.toFixed(2) + ' GB';
+            const mb = bytes / (1024 * 1024);
+            return mb.toFixed(2) + ' MB';
+        },
+        
+        formatPrice(promptPrice, completionPrice) {
+            if (!promptPrice) return '';
+            
+            // Convert to numbers and determine the best scale
+            const prompt = parseFloat(promptPrice);
+            const completion = completionPrice ? parseFloat(completionPrice) : null;
+            
+            // Find appropriate multiplier to get readable numbers (between 0.01 and 999)
+            let multiplier = 1; // 1M tokens
+            let suffix = '1M';
+            let decimals = 2;
+            
+            // Check if we need larger scale
+            if (prompt < 0.00001) {
+                multiplier = 1000; // 1B tokens
+                suffix = '1B';
+                decimals = 4;
+            } else if (prompt < 0.0001) {
+                multiplier = 100; // 100M tokens
+                suffix = '100M';
+                decimals = 3;
+            } else if (prompt < 0.001) {
+                multiplier = 10; // 10M tokens
+                suffix = '10M';
+                decimals = 2;
+            }
+            
+            const promptCost = (prompt * multiplier).toFixed(decimals);
+            const completionCost = completion ? (completion * multiplier).toFixed(decimals) : null;
+            
+            if (completionCost) {
+                return `<span class="text-blue-600">$${promptCost}</span> / <span class="text-purple-600">$${completionCost}</span> per ${suffix} tokens <span class="text-gray-400">(in/out)</span>`;
+            } else {
+                return `<span class="text-blue-600">$${promptCost}</span> per ${suffix} tokens`;
+            }
+        },
+        
+        toggleModel(modelId, wasImported) {
+            const checkbox = document.querySelector(`input[value="${modelId}"]`);
+            const isNowChecked = checkbox.checked;
+            
+            // Remove from both arrays first
+            this.toImport = this.toImport.filter(id => id !== modelId);
+            this.toRemove = this.toRemove.filter(id => id !== modelId);
+            
+            // Determine what changed
+            if (wasImported && !isNowChecked) {
+                // Was imported, now unchecked = remove it
+                this.toRemove.push(modelId);
+            } else if (!wasImported && isNowChecked) {
+                // Was not imported, now checked = import it
+                this.toImport.push(modelId);
+            }
+        },
+        
+        selectAllFiltered() {
+            this.filteredModels.forEach(model => {
+                const checkbox = document.querySelector(`input[value="${model.id}"]`);
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    this.toggleModel(model.id, model.imported);
+                }
+            });
+        },
+        
+        deselectAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    const model = this.allModels.find(m => m.id === cb.value);
+                    if (model) {
+                        cb.checked = false;
+                        this.toggleModel(model.id, model.imported);
+                    }
+                }
+            });
+        },
+        
+        async applyChanges() {
+            if (!this.hasChanges) {
+                return;
+            }
+            
+            this.applying = true;
+            this.statusMessage = null;
+            
+            try {
+                let results = [];
+                
+                // Import new models
+                if (this.toImport.length > 0) {
+                    const importResponse = await fetch(config.importModelsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': config.csrfToken
+                        },
+                        body: JSON.stringify({
+                            provider_id: config.providerId,
+                            model_ids: this.toImport
+                        })
+                    });
+                    
+                    const importResult = await importResponse.json();
+                    results.push(importResult);
+                }
+                
+                // Remove models
+                if (this.toRemove.length > 0) {
+                    const removeResponse = await fetch(config.removeModelsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': config.csrfToken
+                        },
+                        body: JSON.stringify({
+                            provider_id: config.providerId,
+                            model_ids: this.toRemove
+                        })
+                    });
+                    
+                    const removeResult = await removeResponse.json();
+                    results.push(removeResult);
+                }
+                
+                // Check if all operations succeeded
+                const allSuccess = results.every(r => r.success);
+                this.statusSuccess = allSuccess;
+                this.statusMessage = results.map(r => r.message).join('. ');
+                
+                if (allSuccess) {
+                    // Clear changes and reload page after a delay
+                    this.toImport = [];
+                    this.toRemove = [];
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                this.statusSuccess = false;
+                this.statusMessage = 'Operation failed: ' + error.message;
+            } finally {
+                this.applying = false;
+            }
+        },
+        
+        async syncModels() {
+            this.syncing = true;
+            this.statusMessage = null;
+            
+            try {
+                const response = await fetch(config.syncModelsUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': config.csrfToken
+                    }
+                });
+                
+                const result = await response.json();
+                this.statusSuccess = result.success;
+                this.statusMessage = result.message;
+                
+                if (result.success) {
+                    // Reload page after a delay to show updated model list
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                this.statusSuccess = false;
+                this.statusMessage = 'Sync failed: ' + error.message;
+            } finally {
+                this.syncing = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

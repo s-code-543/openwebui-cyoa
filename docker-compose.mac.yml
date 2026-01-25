@@ -1,0 +1,40 @@
+services:
+  # Ollama runs natively on Mac via `brew install ollama`
+  # Access at: http://host.docker.internal:11434
+  
+  # Whisper.cpp runs natively via LaunchAgent
+  # Access at: http://host.docker.internal:10300
+
+  # CYOA Game Server
+  cyoa-game-server:
+    build: ./cyoa-game-server
+    container_name: cyoa-game-server
+    restart: unless-stopped
+    expose:
+      - "8000"
+    ports:
+      - "5678:5678"  # debugpy remote debugging
+      - "8001:8000"  # Optional: Direct HTTP access for debugging
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me-to-a-long-random-string}
+      DJANGO_DEBUG: "1"
+      PYTHONUNBUFFERED: "1"
+      # Allow connections from Nginx and host for debugging
+      DJANGO_ALLOWED_HOSTS: "cyoa.mac.stargate.lan,localhost,127.0.0.1,cyoa-game-server,host.docker.internal"
+      # Ollama connection
+      OLLAMA_URL: "http://host.docker.internal:11434"
+    volumes:
+      - ./cyoa-game-server:/app
+      - ./cyoa_prompts:/story_prompts  # Story prompt files
+      - cyoa-db:/app/db  # Persist SQLite database
+    networks:
+      - stargate-shared
+
+networks:
+  stargate-shared:
+    external: true
+
+volumes:
+  cyoa-db:
+  

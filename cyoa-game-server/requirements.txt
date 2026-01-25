@@ -1,3 +1,13 @@
 Django==5.1.4
 requests==2.32.3
 debugpy==1.8.9
+markdown2==2.5.1
+
+# Testing dependencies
+pytest==8.3.4
+pytest-django==4.9.0
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+factory-boy==3.3.1
+freezegun==1.4.0
+responses==0.25.3
